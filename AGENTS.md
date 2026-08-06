@@ -34,3 +34,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 4. GitHub Sync
 *   **Always Push to Main Repo:** The main repository is https://github.com/665051000123-cpu/Ram-2-DMS.git. After making significant code changes or upon user request, automatically commit and push the code with Thai commit messages.
+commit message ต้องเป็น ภาษาไทย เช่น "เพิ่มฟีเจอร์ A", "แก้ไขบั๊ก B"
