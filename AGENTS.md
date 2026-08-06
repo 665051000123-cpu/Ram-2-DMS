@@ -27,3 +27,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 *   ใช้ Environment Variables (.env)
 *   วันที่แสดงผลเป็น พ.ศ. เก็บในฐานเป็น ISO 8601
 *   **Port Config:** ตั้งค่ารันโปรเจกต์ไว้ที่พอร์ต 5175 ขึ้นไป
+
+## 4. GitHub Sync
+*   **Always Push to Main Repo:** The main repository is https://github.com/665051000123-cpu/Ram-2-DMS.git. After making significant code changes or upon user request, automatically commit and push the code to master.
