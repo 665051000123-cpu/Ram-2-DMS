@@ -1,0 +1,148 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  DEPT_HEAD
+  STAFF
+}
+
+enum DocumentVisibility {
+  DEPARTMENT
+  PRIVATE
+  PUBLIC
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  users     User[]
+  documents Document[]
+}
+
+model User {
+  id                  String      @id @default(uuid())
+  email               String      @unique
+  passwordHash        String
+  name                String
+  role                Role        @default(STAFF)
+  forcePasswordChange Boolean     @default(true)
+  departmentId        String?
+  department          Department? @relation(fields: [departmentId], references: [id])
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  uploadedDocs        Document[]
+  uploadedVersions    DocumentVersion[]
+  auditLogs           AuditLog[]
+  favorites           Favorite[]
+  notifications       Notification[]
+  documentAccess      DocumentAccess[]
+}
+
+model Document {
+  id           String     @id @default(uuid())
+  title        String
+  description  String?
+  fileUrl      String     // URL หรือที่เก็บไฟล์ในระบบ
+  fileType     String     // เช่น 'application/pdf', 'image/jpeg'
+  tags         String     // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
+  documentType String?    // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
+  currentVersion Int      @default(1)
+  
+  visibility   DocumentVisibility @default(DEPARTMENT)
+  
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  
+  uploaderId   String
+  uploader     User       @relation(fields: [uploaderId], references: [id])
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  auditLogs    AuditLog[]
+  versions     DocumentVersion[]
+  favoritedBy  Favorite[]
+  accessList   DocumentAccess[]
+}
+
+model DocumentVersion {
+  id           String     @id @default(uuid())
+  documentId   String
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version      Int
+  fileUrl      String
+  fileType     String
+  uploaderId   String
+  uploader     User       @relation(fields: [uploaderId], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model Favorite {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId   String
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, documentId])
+}
+
+enum ActionType {
+  UPLOAD
+  VIEW
+  DOWNLOAD
+  EDIT
+  DELETE
+}
+
+model AuditLog {
+  id         String     @id @default(uuid())
+  action     ActionType
+  documentId String?
+  document   Document?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  details    String?    // ข้อมูลเพิ่มเติม เช่น comment
+  createdAt  DateTime   @default(now())
+}
+
+model DocumentAccess {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canEdit    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}

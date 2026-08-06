@@ -1,0 +1,142 @@
+'use client';
+
+import { useState } from 'react';
+import { Search, Activity, UploadCloud, Download, Trash2, Eye, Edit } from 'lucide-react';
+import { format } from 'date-fns';
+
+type AuditLog = {
+  id: string;
+  action: string;
+  details: string | null;
+  createdAt: Date;
+  user?: {
+    name: string;
+    role: string;
+  } | null;
+  document?: {
+    title: string;
+    department?: {
+      name: string;
+    } | null;
+  } | null;
+};
+
+export default function AuditLogList({ 
+  initialLogs, 
+  currentUserRole 
+}: { 
+  initialLogs: AuditLog[],
+  currentUserRole: string
+}) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredLogs = initialLogs.filter((log) => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      log.user?.name.toLowerCase().includes(searchLower) ||
+      log.document?.title.toLowerCase().includes(searchLower) ||
+      log.action.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'UPLOAD': return <UploadCloud size={16} className="text-emerald-500" />;
+      case 'DOWNLOAD': return <Download size={16} className="text-blue-500" />;
+      case 'VIEW': return <Eye size={16} className="text-purple-500" />;
+      case 'EDIT': return <Edit size={16} className="text-orange-500" />;
+      case 'DELETE': return <Trash2 size={16} className="text-red-500" />;
+      default: return <Activity size={16} className="text-slate-500" />;
+    }
+  };
+
+  const getActionBadge = (action: string) => {
+    switch (action) {
+      case 'UPLOAD': return <span className="px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-medium border border-emerald-100">อัปโหลด</span>;
+      case 'DOWNLOAD': return <span className="px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-medium border border-blue-100">ดาวน์โหลด/เปิดดู</span>;
+      case 'EDIT': return <span className="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-medium border border-orange-100">แก้ไขข้อมูล</span>;
+      case 'DELETE': return <span className="px-2.5 py-1 bg-red-50 text-red-600 rounded-full text-xs font-medium border border-red-100">ลบเอกสาร</span>;
+      default: return <span className="px-2.5 py-1 bg-slate-50 text-slate-600 rounded-full text-xs font-medium border border-slate-200">{action}</span>;
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      
+      {/* Header & Search */}
+      <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+        <div className="relative w-full md:w-96">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-slate-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="ค้นหาชื่อผู้ใช้, ชื่อเอกสาร, หรือ Action..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
+              <th className="font-semibold py-4 px-6 w-1/4">วันที่และเวลา</th>
+              <th className="font-semibold py-4 px-6">ผู้ทำรายการ</th>
+              <th className="font-semibold py-4 px-6">การกระทำ (Action)</th>
+              <th className="font-semibold py-4 px-6 w-1/3">ชื่อเอกสาร</th>
+              {currentUserRole === 'SUPER_ADMIN' && (
+                <th className="font-semibold py-4 px-6">แผนก (ของเอกสาร)</th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filteredLogs.length > 0 ? (
+              filteredLogs.map((log) => (
+                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="py-4 px-6 text-sm text-slate-600">
+                    {format(new Date(log.createdAt), 'dd MMM yyyy, HH:mm:ss')}
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-slate-800">{log.user?.name || 'Unknown User'}</span>
+                      <span className="text-xs text-slate-400">{log.user?.role || 'Unknown'}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-2">
+                      {getActionIcon(log.action)}
+                      {getActionBadge(log.action)}
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <span className="font-medium text-slate-700 line-clamp-2">
+                      {log.document?.title || <span className="text-slate-400 italic">ไม่พบเอกสาร (อาจถูกลบไปแล้ว)</span>}
+                    </span>
+                  </td>
+                  {currentUserRole === 'SUPER_ADMIN' && (
+                    <td className="py-4 px-6 text-sm text-slate-600">
+                      {log.document?.department?.name || '-'}
+                    </td>
+                  )}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={currentUserRole === 'SUPER_ADMIN' ? 5 : 4} className="py-16 text-center">
+                  <div className="inline-flex flex-col items-center justify-center text-slate-400">
+                    <Activity size={48} className="mb-4 opacity-20" />
+                    <p className="text-lg font-medium">ไม่พบประวัติการใช้งาน</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
