@@ -78,6 +78,7 @@ export async function POST(req: Request) {
         description: description || null,
         fileUrl,
         fileType: file.type,
+        fileSize: buffer.length,
         tags: tags || '',
         documentType: documentType || null,
         currentVersion: 1,
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
             version: 1,
             fileUrl,
             fileType: file.type,
+            fileSize: buffer.length,
             uploaderId: session.user.id,
           }
         },
@@ -107,6 +109,48 @@ export async function POST(req: Request) {
         details: `Uploaded file: ${uniqueFilename}`
       }
     });
+
+    // --- Notifications Logic ---
+    // 1. Notify department members
+    if (visibility === 'DEPARTMENT' || visibility === 'PUBLIC') {
+      const deptUsers = await prisma.user.findMany({
+        where: {
+          departmentId: session.user.departmentId,
+          notifyOnUpload: true,
+          id: { not: session.user.id }
+        }
+      });
+      if (deptUsers.length > 0) {
+        await prisma.notification.createMany({
+          data: deptUsers.map(u => ({
+            userId: u.id,
+            title: 'เอกสารใหม่ในแผนก',
+            message: `${session.user.name} อัปโหลดเอกสารใหม่: "${title}"`,
+            link: '/documents'
+          }))
+        });
+      }
+    }
+
+    // 2. Notify shared users
+    if (visibility === 'PRIVATE' && accessListData.length > 0) {
+      const sharedUsersToNotify = await prisma.user.findMany({
+        where: {
+          id: { in: accessListData.map(a => a.userId) },
+          notifyOnShare: true
+        }
+      });
+      if (sharedUsersToNotify.length > 0) {
+        await prisma.notification.createMany({
+          data: sharedUsersToNotify.map(u => ({
+            userId: u.id,
+            title: 'มีเอกสารแชร์ถึงคุณ',
+            message: `${session.user.name} ได้แชร์เอกสารส่วนตัว: "${title}" ให้คุณ`,
+            link: '/documents'
+          }))
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, document: newDocument }, { status: 201 });
 

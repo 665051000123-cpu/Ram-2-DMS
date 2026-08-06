@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Search, FileText, Download, Eye, Calendar, Tag, Trash2, Filter, Edit, Star, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, FileText, Download, Eye, Calendar, Tag, Trash2, Filter, Edit, Star, CheckCircle, XCircle, Folder, LayoutGrid, List, ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react';
 import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ type Document = {
   favoritedBy?: { userId: string }[];
   versions?: { version: number; fileUrl: string; fileType: string; createdAt: Date }[];
   createdAt: Date;
+  updatedAt?: Date;
   uploader: {
     name: string;
   };
@@ -41,6 +42,9 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
   const [filterDepartment, setFilterDepartment] = useState('ALL');
   const [filterType, setFilterType] = useState('ALL');
   
+  const [viewMode, setViewMode] = useState<'folder' | 'list'>('folder');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, docId: string, docTitle: string}>({
     isOpen: false, docId: '', docTitle: ''
   });
@@ -58,6 +62,14 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
     isOpen: false, docId: '', title: '', description: '', tags: '', documentType: '', visibility: 'DEPARTMENT', file: null
   });
   const [isEditing, setIsEditing] = useState(false);
+  
+  const [viewModal, setViewModal] = useState<{isOpen: boolean, url: string, title: string}>({
+    isOpen: false, url: '', title: ''
+  });
+
+  const [historyModal, setHistoryModal] = useState<{isOpen: boolean, doc: Document | null}>({
+    isOpen: false, doc: null
+  });
   
   const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
     'แบบฟอร์ม', 'ประกาศ', 'แนวทางปฏิบัติ', 'ระเบียบการ', 'อื่นๆ'
@@ -83,8 +95,29 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
     }
   };
   
+  const folders = useMemo(() => {
+    const deptMap = new Map<string, number>();
+    documents.forEach(doc => {
+      const deptName = doc.department?.name || 'ทั่วไป / ไม่ระบุแผนก';
+      deptMap.set(deptName, (deptMap.get(deptName) || 0) + 1);
+    });
+    return Array.from(deptMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => {
+        if (a.name === 'ทั่วไป / ไม่ระบุแผนก') return 1;
+        if (b.name === 'ทั่วไป / ไม่ระบุแผนก') return -1;
+        return a.name.localeCompare(b.name);
+      });
+  }, [documents]);
+
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
+      // If a folder is selected, filter by that folder exactly
+      if (selectedFolder) {
+        const docDept = doc.department?.name || 'ทั่วไป / ไม่ระบุแผนก';
+        if (docDept !== selectedFolder) return false;
+      }
+
       // Text search
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = doc.title.toLowerCase().includes(searchLower) || doc.tags.toLowerCase().includes(searchLower);
@@ -104,7 +137,7 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
       
       return matchesSearch && matchesDept && matchesDate && matchesType;
     });
-  }, [documents, searchTerm, filterDate, filterDepartment, filterType]);
+  }, [documents, searchTerm, filterDate, filterDepartment, filterType, viewMode, selectedFolder]);
 
   const handleToggleStar = async (docId: string, isCurrentlyFavorited: boolean) => {
     try {
@@ -206,20 +239,86 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       
-      {/* 1. ส่วนหัวและช่องค้นหา */}
-      <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+      {/* 1. ส่วนหัวและสลับมุมมอง */}
+      <div className="p-4 md:p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">รายการเอกสาร</h2>
+          <h2 className="text-xl font-bold text-slate-800">
+            {viewMode === 'folder' && !selectedFolder ? 'หมวดหมู่เอกสาร' : 'รายการเอกสาร'}
+          </h2>
           <p className="text-sm text-slate-500 mt-1">
-            พบเอกสารทั้งหมด {filteredDocs.length} รายการ
+            {viewMode === 'folder' && !selectedFolder 
+              ? `พบ ${folders.length} แผนกหมวดหมู่`
+              : `พบเอกสารทั้งหมด ${filteredDocs.length} รายการ`
+            }
           </p>
+        </div>
+
+        <div className="flex items-center gap-2 bg-slate-200 p-1 rounded-xl">
+          <button
+            onClick={() => { setViewMode('folder'); setSelectedFolder(null); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              viewMode === 'folder' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:bg-slate-300/50'
+            }`}
+          >
+            <LayoutGrid size={16} /> โฟลเดอร์
+          </button>
+          <button
+            onClick={() => { setViewMode('list'); setSelectedFolder(null); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:bg-slate-300/50'
+            }`}
+          >
+            <List size={16} /> รายการทั้งหมด
+          </button>
         </div>
       </div>
         
-      {/* Filters Toolbar */}
-      <div className="p-4 border-b border-slate-200 bg-white flex flex-col md:flex-row gap-4">
-        {/* Search */}
-        <div className="relative flex-1">
+      {/* 2. เนื้อหา (Folder Grid OR Document List) */}
+      
+      {viewMode === 'folder' && !selectedFolder ? (
+        // ================= FOLDER GRID VIEW =================
+        <div className="p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {folders.map(folder => (
+              <button
+                key={folder.name}
+                onClick={() => setSelectedFolder(folder.name)}
+                className="flex flex-col items-center justify-center p-8 bg-white border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md hover:bg-blue-50/30 transition-all group"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Folder size={32} fill="currentColor" className="opacity-20 absolute" />
+                  <Folder size={32} className="relative z-10" />
+                </div>
+                <h3 className="font-bold text-slate-800 text-center line-clamp-1">{folder.name}</h3>
+                <p className="text-sm text-slate-500 mt-1">{folder.count} เอกสาร</p>
+              </button>
+            ))}
+          </div>
+          {folders.length === 0 && (
+            <div className="py-16 text-center text-slate-400">
+              <Folder size={48} className="mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-medium">ไม่มีหมวดหมู่เอกสาร</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        // ================= DOCUMENT LIST VIEW =================
+        <>
+          {/* Filters Toolbar */}
+          <div className="p-4 border-b border-slate-200 bg-white flex flex-col md:flex-row gap-4 items-center">
+            
+            {selectedFolder && (
+              <button 
+                onClick={() => setSelectedFolder(null)}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition whitespace-nowrap"
+              >
+                <ArrowLeft size={18} />
+                กลับไปโฟลเดอร์
+              </button>
+            )}
+
+            {/* Search */}
+            <div className="relative flex-1 w-full">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-slate-400" />
           </div>
@@ -299,12 +398,47 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredDocs.length > 0 ? (
-              filteredDocs.map((doc) => {
-                const isFavorited = doc.favoritedBy?.some(f => f.userId === currentUserId) || false;
+              (() => {
+                const groups = new Map<string, typeof documents>();
+                filteredDocs.forEach(doc => {
+                  const deptName = doc.department?.name || 'ทั่วไป / ไม่ระบุแผนก';
+                  if (!groups.has(deptName)) groups.set(deptName, []);
+                  groups.get(deptName)!.push(doc);
+                });
                 
-                return (
-                <tr key={doc.id} className="hover:bg-blue-50/50 transition-colors">
-                  <td className="py-4 px-6">
+                const sortedGroups = Array.from(groups.entries()).sort((a, b) => {
+                  if (a[0] === 'ทั่วไป / ไม่ระบุแผนก') return 1;
+                  if (b[0] === 'ทั่วไป / ไม่ระบุแผนก') return -1;
+                  return a[0].localeCompare(b[0]);
+                });
+
+                return sortedGroups.map(([deptName, groupDocs]) => {
+                  const isSearching = searchTerm.trim().length > 0;
+                  
+                  return (
+                  <React.Fragment key={deptName}>
+                    {!selectedFolder && (
+                      <tr 
+                        className="bg-slate-100/70 hover:bg-slate-200/70 cursor-pointer transition-colors"
+                        onClick={() => setSelectedFolder(deptName)}
+                      >
+                        <td colSpan={currentUserRole === 'SUPER_ADMIN' ? 6 : 5} className="py-4 px-6 font-bold text-slate-700 text-sm border-y border-slate-200/50">
+                          <div className="flex items-center gap-3">
+                            <Folder size={20} className="text-blue-600" />
+                            {deptName}
+                            <span className="text-xs font-normal text-slate-500 bg-white px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
+                              {groupDocs.length} รายการ
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {(selectedFolder || (isSearching && !selectedFolder)) && groupDocs.map((doc) => {
+                      const isFavorited = doc.favoritedBy?.some(f => f.userId === currentUserId) || false;
+                      
+                      return (
+                      <tr key={doc.id} className="hover:bg-blue-50/50 transition-colors">
+                        <td className="py-4 px-6">
                     <div className="flex items-start gap-3">
                       <button 
                         onClick={() => handleToggleStar(doc.id, isFavorited)}
@@ -367,17 +501,27 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
                       {format(new Date(doc.createdAt), 'dd/MM/yyyy HH:mm')}
                     </div>
                   </td>
-                  <td className="py-4 px-6">
+                  <td className="py-4 px-6 whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2">
-                      <a 
-                        href={`/api/documents/${doc.id}/download`} 
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
-                        title="ดูเอกสาร"
-                      >
-                        <Eye size={18} />
-                      </a>
+                      {doc.fileType === 'application/pdf' ? (
+                        <button 
+                          onClick={() => setViewModal({ isOpen: true, url: `/api/documents/${doc.id}/download?view=true`, title: doc.title })}
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
+                          title="ดูเอกสาร"
+                        >
+                          <Eye size={18} />
+                        </button>
+                      ) : (
+                        <a 
+                          href={`/api/documents/${doc.id}/download?view=true`} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
+                          title="ดูเอกสาร"
+                        >
+                          <Eye size={18} />
+                        </a>
+                      )}
                       <a 
                         href={`/api/documents/${doc.id}/download`}
                         download
@@ -386,6 +530,16 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
                       >
                         <Download size={18} />
                       </a>
+
+                      {doc.versions && doc.versions.length > 0 && (
+                        <button 
+                          onClick={() => setHistoryModal({ isOpen: true, doc })}
+                          className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          title="ประวัติเวอร์ชัน"
+                        >
+                          <Calendar size={18} />
+                        </button>
+                      )}
 
                       {(doc.uploader.name === currentUserId || currentUserRole === 'SUPER_ADMIN' || currentUserRole === 'DEPARTMENT_HEAD') && (
                         <>
@@ -409,7 +563,11 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
                   </td>
                 </tr>
                 );
-              })
+              })}
+              </React.Fragment>
+            );
+            })
+            })()
             ) : (
               <tr>
                 <td colSpan={currentUserRole === 'SUPER_ADMIN' ? 6 : 5} className="py-16 text-center">
@@ -424,6 +582,8 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       <ConfirmModal 
         isOpen={confirmModal.isOpen}
@@ -538,6 +698,99 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View PDF Modal */}
+      {viewModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 flex flex-col items-center justify-center z-[60] p-4">
+          <div className="w-full max-w-5xl bg-white rounded-t-xl p-4 flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <FileText className="text-blue-600" />
+              {viewModal.title}
+            </h3>
+            <button 
+              onClick={() => setViewModal({ isOpen: false, url: '', title: '' })}
+              className="p-2 text-slate-400 hover:bg-slate-100 hover:text-red-500 rounded-lg transition"
+            >
+              <XCircle size={24} />
+            </button>
+          </div>
+          <div className="w-full max-w-5xl h-[80vh] bg-slate-100 rounded-b-xl overflow-hidden">
+            <iframe 
+              src={viewModal.url} 
+              className="w-full h-full border-0"
+              title="PDF Viewer"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* History (Version Control) Modal */}
+      {historyModal.isOpen && historyModal.doc && (
+        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <Calendar className="text-indigo-500" size={24} />
+                <h3 className="text-xl font-bold text-slate-800">ประวัติเวอร์ชันของเอกสาร</h3>
+              </div>
+              <button 
+                onClick={() => setHistoryModal({ isOpen: false, doc: null })}
+                className="p-2 text-slate-400 hover:bg-slate-200 hover:text-red-500 rounded-lg transition"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              <p className="text-slate-800 font-semibold mb-4 text-lg border-b pb-2">{historyModal.doc.title}</p>
+              
+              <div className="space-y-4">
+                {/* Current Version */}
+                <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
+                  <div>
+                    <span className="inline-block px-2.5 py-1 bg-emerald-200 text-emerald-800 rounded text-xs font-bold mb-1">
+                      เวอร์ชันปัจจุบัน (V{historyModal.doc.currentVersion}.0)
+                    </span>
+                    <p className="text-sm text-slate-600">อัปโหลดล่าสุด: {format(new Date(historyModal.doc.updatedAt || historyModal.doc.createdAt), 'dd/MM/yyyy HH:mm')}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <a 
+                      href={`/api/documents/${historyModal.doc.id}/download`}
+                      download
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition flex items-center gap-2"
+                    >
+                      <Download size={16} /> ดาวน์โหลด
+                    </a>
+                  </div>
+                </div>
+
+                {/* Old Versions */}
+                {historyModal.doc.versions?.map((v) => (
+                  <div key={v.version} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div>
+                      <span className="inline-block px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-xs font-bold mb-1">
+                        เวอร์ชัน {v.version}.0
+                      </span>
+                      <p className="text-sm text-slate-600">อัปโหลดเมื่อ: {format(new Date(v.createdAt), 'dd/MM/yyyy HH:mm')}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <a 
+                        href={v.fileUrl}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-sm font-medium rounded-lg transition flex items-center gap-2"
+                      >
+                        <Download size={16} /> โหลดไฟล์เก่า
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

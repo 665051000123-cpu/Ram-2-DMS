@@ -35,29 +35,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized to delete this document' }, { status: 403 });
     }
 
-    // Delete file from disk
-    if (document.fileUrl) {
-      // fileUrl is something like '/uploads/HR/filename.pdf'
-      // process.cwd() + 'public' + '/uploads/HR/filename.pdf'
-      const filePath = path.join(process.cwd(), 'public', document.fileUrl);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    }
-
-    // Create Audit Log before deleting document (or it might fail if cascading is off)
+    // Soft Delete: Do not remove file from disk yet.
+    // Create Audit Log
     await prisma.auditLog.create({
       data: {
         action: 'DELETE',
         userId: session.user.id,
         documentId: document.id,
-        details: `Deleted document: ${document.title}`
+        details: `Soft-deleted document: ${document.title}`
       }
     });
 
-    // Delete record from DB
-    await prisma.document.delete({
-      where: { id: docId }
+    // Update record in DB
+    await prisma.document.update({
+      where: { id: docId },
+      data: { isDeleted: true, deletedAt: new Date() }
     });
 
     return NextResponse.json({ success: true });
@@ -109,6 +101,7 @@ export async function PUT(
 
     let fileUrl = document.fileUrl;
     let fileType = document.fileType;
+    let fileSize = document.fileSize;
     let newVersionNumber = document.currentVersion;
     let hasNewFile = false;
 
@@ -133,6 +126,7 @@ export async function PUT(
 
       fileUrl = `/uploads/${deptFolderName}/${uniqueFilename}`;
       fileType = file.type;
+      fileSize = buffer.length;
       newVersionNumber += 1;
       hasNewFile = true;
     }
@@ -151,12 +145,14 @@ export async function PUT(
     if (hasNewFile) {
       updateData.fileUrl = fileUrl;
       updateData.fileType = fileType;
+      updateData.fileSize = fileSize;
       updateData.currentVersion = newVersionNumber;
       updateData.versions = {
         create: {
           version: newVersionNumber,
           fileUrl,
           fileType,
+          fileSize,
           uploaderId: session.user.id,
         }
       };

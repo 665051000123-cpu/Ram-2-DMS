@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Activity, UploadCloud, Download, Trash2, Eye, Edit } from 'lucide-react';
+import { Search, Activity, UploadCloud, Download, Trash2, Eye, Edit, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
+import * as XLSX from 'xlsx';
 
 type AuditLog = {
   id: string;
@@ -60,12 +61,47 @@ export default function AuditLogList({
     }
   };
 
+  const handleExportExcel = () => {
+    if (filteredLogs.length === 0) return;
+
+    // Prepare data for Excel
+    const dataToExport = filteredLogs.map((log) => ({
+      'วันที่และเวลา': format(new Date(log.createdAt), 'dd/MM/yyyy HH:mm:ss'),
+      'ผู้ทำรายการ': log.user?.name || 'Unknown',
+      'ตำแหน่ง': log.user?.role || 'Unknown',
+      'การกระทำ (Action)': log.action,
+      'ชื่อเอกสาร': log.document?.title || 'ไม่พบเอกสาร',
+      'แผนก (ของเอกสาร)': log.document?.department?.name || '-'
+    }));
+
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    
+    // Adjust column widths
+    const wscols = [
+      { wch: 20 }, // Date
+      { wch: 25 }, // User
+      { wch: 15 }, // Role
+      { wch: 15 }, // Action
+      { wch: 40 }, // Document
+      { wch: 20 }  // Department
+    ];
+    worksheet['!cols'] = wscols;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Audit Logs');
+
+    // Generate file and trigger download
+    const fileName = `AuditLogs_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       
       {/* Header & Search */}
-      <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-        <div className="relative w-full md:w-96">
+      <div className="p-4 md:p-6 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+        <div className="relative w-full md:w-96 flex-shrink-0">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-5 w-5 text-slate-400" />
           </div>
@@ -77,6 +113,17 @@ export default function AuditLogList({
             className="block w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
           />
         </div>
+        
+        {currentUserRole === 'SUPER_ADMIN' && (
+          <button
+            onClick={handleExportExcel}
+            disabled={filteredLogs.length === 0}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 font-semibold rounded-xl transition whitespace-nowrap w-full md:w-auto disabled:opacity-50"
+          >
+            <FileSpreadsheet size={20} />
+            Export to Excel
+          </button>
+        )}
       </div>
 
       {/* Table */}

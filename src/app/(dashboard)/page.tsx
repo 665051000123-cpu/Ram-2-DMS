@@ -75,6 +75,14 @@ export default async function DashboardPage() {
               ? 'นี่คือภาพรวมระบบจัดการเอกสารของ "ทุกแผนก" ประจำวันนี้' 
               : `นี่คือภาพรวมระบบจัดการเอกสารของ ${session.user.departmentName || 'แผนกของคุณ'} ประจำวันนี้`}
           </p>
+          {session.user.role === 'SUPER_ADMIN' && (
+            <div className="mt-6">
+              <Link href="/analytics" className="inline-flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-5 py-2.5 rounded-xl font-medium transition-colors border border-white/20 backdrop-blur-sm shadow-sm">
+                <Activity size={18} />
+                ดูรายงานสถิติเชิงลึก (Analytics)
+              </Link>
+            </div>
+          )}
         </div>
         {/* Decor */}
         <div className="absolute right-0 top-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>

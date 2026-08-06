@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
-import { UserCircle, Shield, Key } from 'lucide-react';
+import { UserCircle, Shield, Key, Bell } from 'lucide-react';
 
 export default function ProfilePage() {
   const { data: session } = useSession();
@@ -12,6 +12,24 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  
+  const [notifyOnUpload, setNotifyOnUpload] = useState(true);
+  const [notifyOnShare, setNotifyOnShare] = useState(true);
+
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/users/settings')
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setNotifyOnUpload(data.notifyOnUpload);
+            setNotifyOnShare(data.notifyOnShare);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +69,23 @@ export default function ProfilePage() {
       toast.error(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/users/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notifyOnUpload, notifyOnShare })
+      });
+      if (!res.ok) throw new Error('บันทึกการตั้งค่าไม่สำเร็จ');
+      toast.success('บันทึกการตั้งค่าแจ้งเตือนแล้ว');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
@@ -151,6 +186,49 @@ export default function ProfilePage() {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* การตั้งค่าการแจ้งเตือน */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
+            <div className="p-6 border-b border-slate-200 bg-slate-50/50 flex items-center gap-2">
+              <Bell className="text-slate-400" />
+              <h2 className="text-lg font-bold text-slate-800">การตั้งค่าการแจ้งเตือน</h2>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-800">แจ้งเตือนเอกสารใหม่ในแผนก</p>
+                  <p className="text-sm text-slate-500">รับการแจ้งเตือนเมื่อมีคนอัปโหลดหรือแก้ไขเอกสารในแผนกของคุณ</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={notifyOnUpload} onChange={e => setNotifyOnUpload(e.target.checked)} />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-800">แจ้งเตือนเมื่อมีการแชร์เอกสาร</p>
+                  <p className="text-sm text-slate-500">รับการแจ้งเตือนเมื่อมีคนให้สิทธิ์การเข้าถึงเอกสารส่วนตัวกับคุณ</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={notifyOnShare} onChange={e => setNotifyOnShare(e.target.checked)} />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  disabled={settingsLoading}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium shadow-sm disabled:opacity-50"
+                >
+                  {settingsLoading ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

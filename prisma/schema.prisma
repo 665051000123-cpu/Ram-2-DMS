@@ -42,6 +42,8 @@ model User {
   name                String
   role                Role        @default(STAFF)
   forcePasswordChange Boolean     @default(true)
+  notifyOnUpload      Boolean     @default(true)
+  notifyOnShare       Boolean     @default(true)
   departmentId        String?
   department          Department? @relation(fields: [departmentId], references: [id])
   createdAt           DateTime    @default(now())
@@ -61,6 +63,7 @@ model Document {
   description  String?
   fileUrl      String     // URL หรือที่เก็บไฟล์ในระบบ
   fileType     String     // เช่น 'application/pdf', 'image/jpeg'
+  fileSize     Int        @default(0) // ขนาดไฟล์เป็น byte
   tags         String     // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
   documentType String?    // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
   currentVersion Int      @default(1)
@@ -75,6 +78,8 @@ model Document {
   
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  isDeleted    Boolean    @default(false)
+  deletedAt    DateTime?
 
   auditLogs    AuditLog[]
   versions     DocumentVersion[]
@@ -89,6 +94,7 @@ model DocumentVersion {
   version      Int
   fileUrl      String
   fileType     String
+  fileSize     Int        @default(0)
   uploaderId   String
   uploader     User       @relation(fields: [uploaderId], references: [id])
   createdAt    DateTime   @default(now())

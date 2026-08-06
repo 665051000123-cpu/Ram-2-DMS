@@ -11,14 +11,19 @@ export default async function DocumentsPage() {
     redirect('/login');
   }
 
-  let whereClause: any = {};
+  let whereClause: any = { isDeleted: false };
   if (session.user.role !== 'SUPER_ADMIN') {
     whereClause = {
-      OR: [
-        { visibility: 'PUBLIC' },
-        { visibility: 'DEPARTMENT', departmentId: session.user.departmentId },
-        { visibility: 'PRIVATE', uploaderId: session.user.id },
-        { visibility: 'PRIVATE', accessList: { some: { userId: session.user.id } } }
+      AND: [
+        { isDeleted: false },
+        {
+          OR: [
+            { visibility: 'PUBLIC' },
+            { visibility: 'DEPARTMENT', departmentId: session.user.departmentId },
+            { visibility: 'PRIVATE', uploaderId: session.user.id },
+            { visibility: 'PRIVATE', accessList: { some: { userId: session.user.id } } }
+          ]
+        }
       ]
     };
   }

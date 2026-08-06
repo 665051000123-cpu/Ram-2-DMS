@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import fs from 'fs';
+import path from 'path';
+import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib';
 
 export async function GET(
   req: Request,
@@ -16,10 +19,13 @@ export async function GET(
 
     const resolvedParams = await params;
     const docId = resolvedParams.id;
+    
+    const url = new URL(req.url);
+    const isView = url.searchParams.get('view') === 'true';
 
     // Find the document
     const document = await prisma.document.findUnique({
-      where: { id: docId },
+      where: { id: docId, isDeleted: false },
       include: { accessList: true }
     });
 
@@ -37,18 +43,22 @@ export async function GET(
       }
     }
 
-    // Create Audit Log for DOWNLOAD
+    // Create Audit Log for DOWNLOAD/VIEW
     await prisma.auditLog.create({
       data: {
-        action: 'DOWNLOAD',
+        action: isView ? 'VIEW' : 'DOWNLOAD',
         documentId: document.id,
         userId: session.user.id,
-        details: 'Downloaded or viewed document'
+        details: isView ? 'Viewed document' : 'Downloaded document'
       }
     });
 
-    // Redirect to the actual static file URL
-    return NextResponse.redirect(new URL(document.fileUrl, req.url));
+    // Build base URL from headers to avoid 0.0.0.0 when hosted externally
+    const host = req.headers.get('host') || 'localhost:5175';
+    const protocol = req.headers.get('x-forwarded-proto') || (req.url.startsWith('https') ? 'https' : 'http');
+    const baseUrl = `${protocol}://${host}`;
+    
+    return NextResponse.redirect(new URL(document.fileUrl, baseUrl));
 
   } catch (error) {
     console.error('Download/View Error:', error);
