@@ -78,7 +78,9 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-colors"
-                  placeholder="เช่น HN12345"
+                  placeholder="XXXXXX"
+                  minLength={6}
+                  maxLength={6}
                 />
               </div>
             </div>

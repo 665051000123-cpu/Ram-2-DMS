@@ -87,6 +87,7 @@ export async function PUT(
     const description = formData.get('description') as string;
     const tags = formData.get('tags') as string;
     const documentType = formData.get('documentType') as string;
+    const visibility = formData.get('visibility') as string;
     const file = formData.get('file') as File | null;
 
     const document = await prisma.document.findUnique({
@@ -142,6 +143,10 @@ export async function PUT(
       tags: tags !== null ? tags : document.tags,
       documentType: documentType !== null ? documentType : document.documentType,
     };
+
+    if (visibility) {
+      updateData.visibility = visibility;
+    }
 
     if (hasNewFile) {
       updateData.fileUrl = fileUrl;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Search, FileText, Download, Eye, Calendar, Tag, Trash2, Filter, Edit, Star, CheckCircle, XCircle } from 'lucide-react';
 import { format, isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { useRouter } from 'next/navigation';
@@ -52,11 +52,36 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
     description: string;
     tags: string;
     documentType: string;
+    visibility: string;
     file: File | null;
   }>({
-    isOpen: false, docId: '', title: '', description: '', tags: '', documentType: '', file: null
+    isOpen: false, docId: '', title: '', description: '', tags: '', documentType: '', visibility: 'DEPARTMENT', file: null
   });
   const [isEditing, setIsEditing] = useState(false);
+  
+  const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
+    'แบบฟอร์ม', 'ประกาศ', 'แนวทางปฏิบัติ', 'ระเบียบการ', 'อื่นๆ'
+  ]);
+
+  useEffect(() => {
+    const loadedDocTypes = localStorage.getItem('dms_saved_doctypes');
+    if (loadedDocTypes) {
+      setSavedDocTypes(JSON.parse(loadedDocTypes));
+    }
+  }, []);
+
+  const handleSaveEditDocType = () => {
+    if (!editModal.documentType.trim()) return;
+    const newType = editModal.documentType.trim();
+    if (!savedDocTypes.includes(newType)) {
+      const updatedTypes = [...savedDocTypes, newType];
+      setSavedDocTypes(updatedTypes);
+      localStorage.setItem('dms_saved_doctypes', JSON.stringify(updatedTypes));
+      toast.success('บันทึกประเภทเอกสารใหม่เรียบร้อยแล้ว');
+    } else {
+      toast.success('มีประเภทเอกสารนี้อยู่แล้ว');
+    }
+  };
   
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
@@ -134,6 +159,7 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
       description: doc.description || '',
       tags: doc.tags || '',
       documentType: doc.documentType || '',
+      visibility: doc.visibility || 'DEPARTMENT',
       file: null
     });
   };
@@ -148,6 +174,7 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
       formData.append('description', editModal.description);
       formData.append('tags', editModal.tags);
       formData.append('documentType', editModal.documentType);
+      formData.append('visibility', editModal.visibility);
       if (editModal.file) {
         formData.append('file', editModal.file);
       }
@@ -213,11 +240,9 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
             className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
           >
             <option value="ALL">ทุกประเภท</option>
-            <option value="แบบฟอร์ม">แบบฟอร์ม</option>
-            <option value="ประกาศ">ประกาศ</option>
-            <option value="แนวทางปฏิบัติ">แนวทางปฏิบัติ</option>
-            <option value="ระเบียบการ">ระเบียบการ</option>
-            <option value="อื่นๆ">อื่นๆ</option>
+            {savedDocTypes.map((type, idx) => (
+              <option key={idx} value={type}>{type}</option>
+            ))}
           </select>
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <FileText className="h-4 w-4 text-slate-400" />
@@ -440,17 +465,39 @@ export default function DocumentList({ initialDocuments, currentUserId, currentU
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">ประเภทเอกสาร</label>
+                <div className="flex gap-2">
+                  <input
+                    list="editDocTypesList"
+                    value={editModal.documentType}
+                    onChange={e => setEditModal({ ...editModal, documentType: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="เลือกหรือพิมพ์ประเภทเอกสารใหม่..."
+                  />
+                  <datalist id="editDocTypesList">
+                    {savedDocTypes.map((type, idx) => (
+                      <option key={idx} value={type} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    onClick={handleSaveEditDocType}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition whitespace-nowrap shrink-0"
+                  >
+                    บันทึก
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">สิทธิ์การเข้าถึง (Visibility)</label>
                 <select
-                  value={editModal.documentType}
-                  onChange={e => setEditModal({ ...editModal, documentType: e.target.value })}
+                  value={editModal.visibility}
+                  onChange={e => setEditModal({ ...editModal, visibility: e.target.value })}
                   className="w-full p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
-                  <option value="">เลือกประเภทเอกสาร</option>
-                  <option value="แบบฟอร์ม">แบบฟอร์ม</option>
-                  <option value="ประกาศ">ประกาศ</option>
-                  <option value="แนวทางปฏิบัติ">แนวทางปฏิบัติ</option>
-                  <option value="ระเบียบการ">ระเบียบการ</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
+                  <option value="DEPARTMENT">เห็นเฉพาะคนในแผนก (DEPARTMENT)</option>
+                  <option value="PUBLIC">เห็นได้ทุกแผนก (PUBLIC)</option>
+                  <option value="PRIVATE">ส่วนตัว (PRIVATE)</option>
                 </select>
               </div>
 

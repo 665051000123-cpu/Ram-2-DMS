@@ -349,7 +349,9 @@ export default function UserList({
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     className="w-full p-2.5 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    placeholder="เช่น HN12345"
+                    placeholder="XXXXXX"
+                    minLength={6}
+                    maxLength={6}
                   />
                 </div>
               {editingUserId && currentUserRole === 'SUPER_ADMIN' && (

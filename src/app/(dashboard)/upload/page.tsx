@@ -15,17 +15,27 @@ export default function UploadPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
+  const [documentType, setDocumentType] = useState('');
   const [visibility, setVisibility] = useState('DEPARTMENT');
 
-  // Saved Tags State
   const [savedTags, setSavedTags] = useState<string[]>([]);
   const [showSavedTags, setShowSavedTags] = useState(false);
+
+  // Saved Document Types State
+  const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
+    'แบบฟอร์ม', 'ประกาศ', 'แนวทางปฏิบัติ', 'ระเบียบการ', 'อื่นๆ'
+  ]);
 
   // Load saved tags on mount
   useEffect(() => {
     const loadedTags = localStorage.getItem('dms_saved_tags');
     if (loadedTags) {
       setSavedTags(JSON.parse(loadedTags));
+    }
+
+    const loadedDocTypes = localStorage.getItem('dms_saved_doctypes');
+    if (loadedDocTypes) {
+      setSavedDocTypes(JSON.parse(loadedDocTypes));
     }
   }, []);
 
@@ -52,6 +62,19 @@ export default function UploadPage() {
       }
     }
     setShowSavedTags(false);
+  };
+
+  const handleSaveDocType = () => {
+    if (!documentType.trim()) return;
+    const newType = documentType.trim();
+    if (!savedDocTypes.includes(newType)) {
+      const updatedTypes = [...savedDocTypes, newType];
+      setSavedDocTypes(updatedTypes);
+      localStorage.setItem('dms_saved_doctypes', JSON.stringify(updatedTypes));
+      toast.success('บันทึกประเภทเอกสารใหม่เรียบร้อยแล้ว');
+    } else {
+      toast.success('มีประเภทเอกสารนี้อยู่แล้ว');
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -114,6 +137,7 @@ export default function UploadPage() {
       formData.append('title', title);
       formData.append('description', description);
       formData.append('tags', tags);
+      formData.append('documentType', documentType);
       formData.append('visibility', visibility);
 
       const res = await fetch('/api/documents/upload', {
@@ -132,6 +156,7 @@ export default function UploadPage() {
       setTitle('');
       setDescription('');
       setTags('');
+      setDocumentType('');
       
     } catch (error) {
       console.error(error);
@@ -235,6 +260,33 @@ export default function UploadPage() {
                   placeholder="เพิ่มข้อมูลที่ช่วยให้อธิบายเอกสารได้ดีขึ้น"
                   rows={3}
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  ประเภทเอกสาร
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    list="docTypesList"
+                    value={documentType}
+                    onChange={(e) => setDocumentType(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                    placeholder="เลือกหรือพิมพ์ประเภทเอกสารใหม่..."
+                  />
+                  <datalist id="docTypesList">
+                    {savedDocTypes.map((type, idx) => (
+                      <option key={idx} value={type} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    onClick={handleSaveDocType}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition whitespace-nowrap shrink-0"
+                  >
+                    บันทึกประเภท
+                  </button>
+                </div>
               </div>
 
               <div className="md:col-span-2 relative">
