@@ -1,28 +1,48 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import fs from "fs";
+import path from "path";
 
 export async function GET() {
   try {
-    const email = "000000";
-    const newDeptName = "แผนก Dev";
-
-    let dept = await prisma.department.findUnique({
-      where: { name: newDeptName },
+    const docs = await prisma.document.findMany({
+      where: { storagePath: null }
     });
-
-    if (!dept) {
-      dept = await prisma.department.create({
-        data: { name: newDeptName },
-      });
+    
+    let updated = 0;
+    const updates = [];
+    
+    for (const doc of docs) {
+      if (!doc.fileUrl) continue;
+      
+      const relativePath = doc.fileUrl.replace("/uploads/", "").split('/').map(p => decodeURIComponent(p));
+      
+      const possibleDirs = [
+        "D:\\DMS_Uploads",
+        "D:\\DMS_Uploads 2",
+        path.join(process.cwd(), "public", "uploads")
+      ];
+      
+      for (const dir of possibleDirs) {
+        const fullPath = path.join(dir, ...relativePath);
+        if (fs.existsSync(fullPath)) {
+          await prisma.document.update({
+            where: { id: doc.id },
+            data: { storagePath: dir }
+          });
+          updates.push(`Updated ${doc.id} -> ${dir}`);
+          updated++;
+          break;
+        }
+      }
     }
-
-    const updatedUser = await prisma.user.update({
-      where: { email },
-      data: { departmentId: dept.id },
+    
+    return NextResponse.json({
+      message: `Successfully backfilled ${updated} documents`,
+      details: updates
     });
-
-    return NextResponse.json({ success: true, updatedUser });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }

@@ -25,6 +25,10 @@ export const authOptions: NextAuthOptions = {
           throw new Error("ไม่พบผู้ใช้งานนี้ในระบบ");
         }
 
+        if (user.isActive === false) {
+          throw new Error("บัญชีนี้ถูกระงับการใช้งาน โปรดติดต่อผู้ดูแลระบบ");
+        }
+
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.passwordHash,
@@ -75,6 +79,7 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
+    maxAge: 60 * 60, // 1 hour
   },
   secret: process.env.NEXTAUTH_SECRET || "super-secret-key-for-dev",
 };

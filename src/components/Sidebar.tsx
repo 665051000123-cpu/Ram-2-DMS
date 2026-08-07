@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   LayoutDashboard,
   FileText,
@@ -14,8 +16,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PieChart,
+  LayoutGrid,
 } from "lucide-react";
-import { useSession } from "next-auth/react";
 
 export default function Sidebar({
   isCollapsed = false,
@@ -26,25 +28,33 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { permissions, loading: permissionsLoading } = usePermissions(session?.user?.role);
 
   const menuItems = [
-    { icon: LayoutDashboard, label: "แดชบอร์ด", href: "/" },
-    { icon: FileText, label: "เอกสารทั้งหมด", href: "/documents" },
+    { icon: LayoutGrid, label: "แดชบอร์ด", href: "/" },
+    { icon: FileText, label: "เอกสารของฉัน", href: "/documents" },
     { icon: UploadCloud, label: "อัปโหลดเอกสาร", href: "/upload" },
   ];
 
-  // ถ้าไม่ใช่ STAFF (คือหัวหน้าแผนก หรือ Admin) ค่อยให้เห็นเมนูขั้นสูง
-  if (
-    session?.user?.role === "SUPER_ADMIN" ||
-    session?.user?.role === "DEPARTMENT_HEAD"
-  ) {
-    menuItems.push({ icon: Trash2, label: "ถังขยะ", href: "/recycle-bin" });
-    menuItems.push({
-      icon: Activity,
-      label: "ประวัติการใช้งาน",
-      href: "/audit-logs",
-    });
-    menuItems.push({ icon: Users, label: "จัดการผู้ใช้งาน", href: "/users" });
+  // Dynamically add menus based on permissions
+  if (permissions && !permissionsLoading) {
+    if (permissions.menu_trash) {
+      menuItems.push({ icon: Trash2, label: "ถังขยะ", href: "/recycle-bin" });
+    }
+    if (permissions.menu_audit) {
+      menuItems.push({
+        icon: Activity,
+        label: "ประวัติการใช้งาน",
+        href: "/audit-logs",
+      });
+    }
+    if (permissions.menu_users) {
+      menuItems.push({ icon: Users, label: "จัดการผู้ใช้งาน", href: "/users" });
+    }
+  }
+
+  // ตั้งค่าระบบ เฉพาะ SUPER_ADMIN
+  if (session?.user?.role === "SUPER_ADMIN") {
     menuItems.push({ icon: Settings, label: "ตั้งค่าระบบ", href: "/settings" });
   }
 

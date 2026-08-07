@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import fs from "fs";
+import path from "path";
+import { getUploadDir } from "@/lib/storage";
 
 export async function GET(req: Request) {
   try {
@@ -62,6 +65,19 @@ export async function POST(req: Request) {
     const newDepartment = await prisma.department.create({
       data: { name },
     });
+
+    // Create physical folder
+    try {
+      const baseUploadDir = await getUploadDir();
+      const deptDir = path.join(baseUploadDir, name);
+      if (!fs.existsSync(deptDir)) {
+        fs.mkdirSync(deptDir, { recursive: true });
+      }
+    } catch (fsError) {
+      console.error("Failed to create physical folder:", fsError);
+      // We don't fail the API request if the physical folder fails to create,
+      // as the system will try to create it again on the first upload.
+    }
 
     return NextResponse.json({ success: true, department: newDepartment });
   } catch (error) {

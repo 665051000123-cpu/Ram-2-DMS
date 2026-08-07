@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getRolePermissions } from "@/lib/server-permissions";
 import fs from "fs";
 import path from "path";
 import { getUploadDir } from "@/lib/storage";
@@ -31,13 +32,14 @@ export async function DELETE(
       );
     }
 
-    // Check permissions: Only Uploader or Admin/Department Head can delete
+    const permissions = await getRolePermissions(session.user.role as string);
     const isUploader = document.uploaderId === session.user.id;
-    const isAdmin =
+    const hasPermission =
       session.user.role === "SUPER_ADMIN" ||
-      session.user.role === "DEPARTMENT_HEAD";
+      isUploader ||
+      permissions.doc_delete;
 
-    if (!isUploader && !isAdmin) {
+    if (!hasPermission) {
       return NextResponse.json(
         { error: "Unauthorized to delete this document" },
         { status: 403 },
@@ -106,13 +108,14 @@ export async function PUT(
       );
     }
 
-    // Check permissions
+    const permissions = await getRolePermissions(session.user.role as string);
     const isUploader = document.uploaderId === session.user.id;
-    const isAdmin =
+    const hasPermission =
       session.user.role === "SUPER_ADMIN" ||
-      session.user.role === "DEPARTMENT_HEAD";
+      isUploader ||
+      permissions.doc_edit;
 
-    if (!isUploader && !isAdmin) {
+    if (!hasPermission) {
       return NextResponse.json(
         { error: "Unauthorized to edit this document" },
         { status: 403 },

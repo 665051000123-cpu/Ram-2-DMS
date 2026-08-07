@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getRolePermissions } from "@/lib/server-permissions";
 
 export async function POST(
   req: Request,
@@ -9,12 +10,19 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (
-      !session?.user ||
-      (session.user.role !== "SUPER_ADMIN" &&
-        session.user.role !== "DEPARTMENT_HEAD")
-    ) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const permissions = await getRolePermissions(session.user.role as string);
+    if (
+      session.user.role !== "SUPER_ADMIN" &&
+      !permissions.doc_delete
+    ) {
+      return NextResponse.json(
+        { error: "Unauthorized to restore documents" },
+        { status: 403 },
+      );
     }
 
     const resolvedParams = await params;

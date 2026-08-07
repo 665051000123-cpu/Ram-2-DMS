@@ -9,6 +9,7 @@ import {
   User as UserIcon,
   Search,
   Filter,
+  Power,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ type User = {
   name: string;
   email: string;
   role: string;
+  isActive: boolean;
   createdAt: Date;
   department?: {
     id: string;
@@ -149,6 +151,24 @@ export default function UserList({
     }
   };
 
+  const handleToggleSuspend = async (userId: string, currentIsActive: boolean) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !currentIsActive, name: users.find(u => u.id === userId)?.name, email: users.find(u => u.id === userId)?.email, role: users.find(u => u.id === userId)?.role }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      
+      const { user } = await res.json();
+      setUsers(users.map((u) => (u.id === userId ? { ...u, isActive: user.isActive } : u)));
+      toast.success(currentIsActive ? "ระงับการใช้งานสำเร็จ" : "เปิดใช้งานสำเร็จ");
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
   const handleDeleteClick = (id: string, name: string) => {
     setConfirmModal({ isOpen: true, userId: id, userName: name });
   };
@@ -180,7 +200,7 @@ export default function UserList({
             Super Admin
           </span>
         );
-      case "DEPARTMENT_HEAD":
+      case "DEPT_HEAD":
         return (
           <span className="px-2 py-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-md text-xs font-semibold">
             หัวหน้าแผนก
@@ -257,7 +277,7 @@ export default function UserList({
           >
             <option value="ALL">ตำแหน่งทั้งหมด</option>
             <option value="SUPER_ADMIN">Super Admin</option>
-            <option value="DEPARTMENT_HEAD">หัวหน้าแผนก</option>
+            <option value="DEPT_HEAD">หัวหน้าแผนก</option>
             <option value="STAFF">เจ้าหน้าที่</option>
           </select>
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -324,11 +344,34 @@ export default function UserList({
                     />{" "}
                     {user.email}
                   </td>
-                  <td className="py-4 px-6">{getRoleBadge(user.role)}</td>
+                  <td className="py-4 px-6">
+                    <div className="flex flex-col gap-1 items-start">
+                      {getRoleBadge(user.role)}
+                      {!user.isActive && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                          ระงับการใช้งาน
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-4 px-6">
                     <div className="flex items-center justify-center gap-2">
                       {user.id !== currentUserId && (
                         <>
+                          <button
+                            onClick={() => handleToggleSuspend(user.id, user.isActive)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                              user.isActive ? "bg-green-500" : "bg-red-500"
+                            }`}
+                            title={user.isActive ? "ระงับการใช้งาน" : "เปิดใช้งาน"}
+                          >
+                            <span className="sr-only">Toggle suspend</span>
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                user.isActive ? "translate-x-6" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
                           <button
                             onClick={() => openEditModal(user)}
                             className="p-2 text-slate-400 dark:text-white hover:text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition"
@@ -458,7 +501,7 @@ export default function UserList({
                   className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
                   <option value="STAFF">เจ้าหน้าที่ (Staff)</option>
-                  <option value="DEPARTMENT_HEAD">
+                  <option value="DEPT_HEAD">
                     หัวหน้าแผนก (Department Head)
                   </option>
                 </select>

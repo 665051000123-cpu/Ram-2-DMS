@@ -31,7 +31,7 @@ export async function GET(req: Request) {
 
     const mappedUsers = users.map((u) => ({
       ...u,
-      role: u.role === "DEPT_HEAD" ? "DEPARTMENT_HEAD" : u.role,
+      role: u.role === "DEPT_HEAD" ? "DEPT_HEAD" : u.role,
     }));
 
     return NextResponse.json({ users: mappedUsers });
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     if (
       !session?.user ||
       (session.user.role !== "SUPER_ADMIN" &&
-        session.user.role !== "DEPARTMENT_HEAD")
+        session.user.role !== "DEPT_HEAD")
     ) {
       return NextResponse.json(
         { error: "Unauthorized or insufficient permissions" },
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     }
 
     // Determine the department ID to assign
-    // If the creator is a DEPARTMENT_HEAD, force the new user to be in the same department
+    // If the creator is a DEPT_HEAD, force the new user to be in the same department
     // If the creator is a SUPER_ADMIN, they can specify the departmentId
     let targetDepartmentId = session.user.departmentId;
     if (session.user.role === "SUPER_ADMIN" && departmentId) {
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const mappedRole = role === "DEPARTMENT_HEAD" ? "DEPT_HEAD" : role;
+    const mappedRole = role === "DEPT_HEAD" ? "DEPT_HEAD" : role;
 
     const newUser = await prisma.user.create({
       data: {
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
 
     const userToReturn = {
       ...newUser,
-      role: newUser.role === "DEPT_HEAD" ? "DEPARTMENT_HEAD" : newUser.role,
+      role: newUser.role === "DEPT_HEAD" ? "DEPT_HEAD" : newUser.role,
     };
 
     return NextResponse.json(

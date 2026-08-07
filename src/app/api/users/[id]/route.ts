@@ -15,7 +15,7 @@ export async function DELETE(
     if (
       !session?.user ||
       (session.user.role !== "SUPER_ADMIN" &&
-        session.user.role !== "DEPARTMENT_HEAD")
+        session.user.role !== "DEPT_HEAD")
     ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
@@ -76,14 +76,14 @@ export async function PUT(
     if (
       !session?.user ||
       (session.user.role !== "SUPER_ADMIN" &&
-        session.user.role !== "DEPARTMENT_HEAD")
+        session.user.role !== "DEPT_HEAD")
     ) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const resolvedParams = await params;
     const userId = resolvedParams.id;
-    const { name, email, role, departmentId, password } = await req.json();
+    const { name, email, role, departmentId, password, isActive } = await req.json();
 
     if (!name || !email || !role) {
       return NextResponse.json(
@@ -124,7 +124,7 @@ export async function PUT(
     }
 
     // Map role back to Prisma's expected ENUM if needed
-    const mappedRole = role === "DEPARTMENT_HEAD" ? "DEPT_HEAD" : role;
+    const mappedRole = role === "DEPT_HEAD" ? "DEPT_HEAD" : role;
 
     // Handle departmentId empty string
     let targetDepartmentId = departmentId;
@@ -140,6 +140,10 @@ export async function PUT(
       departmentId: targetDepartmentId,
     };
 
+    if (isActive !== undefined) {
+      dataToUpdate.isActive = isActive;
+    }
+
     if (password && session.user.role === "SUPER_ADMIN") {
       dataToUpdate.passwordHash = await bcrypt.hash(password, 10);
       dataToUpdate.forcePasswordChange = true;
@@ -154,6 +158,7 @@ export async function PUT(
         name: true,
         email: true,
         role: true,
+        isActive: true,
         createdAt: true,
         department: {
           select: { id: true, name: true },
@@ -165,7 +170,7 @@ export async function PUT(
     const userToReturn = {
       ...updatedUser,
       role:
-        updatedUser.role === "DEPT_HEAD" ? "DEPARTMENT_HEAD" : updatedUser.role,
+        updatedUser.role === "DEPT_HEAD" ? "DEPT_HEAD" : updatedUser.role,
     };
 
     return NextResponse.json({ success: true, user: userToReturn });

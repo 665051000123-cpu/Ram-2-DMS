@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { getRolePermissions } from "@/lib/server-permissions";
 import AuditLogList from "@/components/AuditLogList";
 
 export default async function AuditLogsPage() {
@@ -11,11 +12,9 @@ export default async function AuditLogsPage() {
     redirect("/login");
   }
 
-  // Only SUPER_ADMIN and DEPARTMENT_HEAD can access
-  if (
-    session.user.role !== "SUPER_ADMIN" &&
-    session.user.role !== "DEPARTMENT_HEAD"
-  ) {
+  const permissions = await getRolePermissions(session.user.role);
+
+  if (!permissions.menu_audit) {
     return (
       <div className="p-6 text-center mt-20">
         <h1 className="text-2xl font-bold text-red-600 dark:text-red-300">

@@ -61,15 +61,64 @@ export async function GET(
     });
 
     // Serve the file directly instead of redirecting
-    const baseUploadDir = await import("@/lib/storage").then(m => m.getUploadDir());
-    
     // fileUrl is like /uploads/แผนก/uuid.pdf
     const urlParts = document.fileUrl.split('/').filter(Boolean);
     // urlParts: ['uploads', 'แผนก', 'uuid.pdf']
     const relativePath = urlParts.slice(1).map(p => decodeURIComponent(p));
-    const filePath = path.join(baseUploadDir, ...relativePath);
+    
+    let filePath = "";
+    
+    // Try 1: Database storagePath
+    if (document.storagePath) {
+      filePath = path.join(document.storagePath, ...relativePath);
+    }
+    
+    // Try 2: Current System Upload Dir
+    if (!filePath || !fs.existsSync(filePath)) {
+      const currentUploadDir = await import("@/lib/storage").then(m => m.getUploadDir());
+      const currentPath = path.join(currentUploadDir, ...relativePath);
+      if (fs.existsSync(currentPath)) {
+        filePath = currentPath;
+      } else {
+        // Try 3: Default public/uploads
+        const defaultUploadDir = path.join(process.cwd(), "public", "uploads");
+        const fallbackPath = path.join(defaultUploadDir, ...relativePath);
+        if (fs.existsSync(fallbackPath)) {
+          filePath = fallbackPath;
+        } else {
+          filePath = currentPath; // For error reporting
+        }
+      }
+    }
 
     if (!fs.existsSync(filePath)) {
+      if (isView) {
+        const html = `
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: 'Sarabun', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background-color: #f8fafc; color: #475569; }
+                .container { text-align: center; padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; }
+                h1 { color: #ef4444; font-size: 1.5rem; margin-bottom: 0.5rem; }
+                p { margin-bottom: 1rem; }
+                .path { font-size: 0.875rem; color: #94a3b8; background: #f1f5f9; padding: 0.5rem; border-radius: 6px; word-break: break-all; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>⚠️ ไม่พบไฟล์เอกสาร</h1>
+                <p>ระบบไม่พบไฟล์นี้ในเซิร์ฟเวอร์ อาจถูกลบไปแล้วหรือมีการเปลี่ยนโฟลเดอร์เก็บเอกสารใหม่</p>
+                <div class="path">Path: ${filePath}</div>
+              </div>
+            </body>
+          </html>
+        `;
+        return new NextResponse(html, {
+          status: 404,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
       return NextResponse.json(
         { error: `File not found on server (Path: ${filePath})` },
         { status: 404 }

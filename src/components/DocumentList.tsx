@@ -25,6 +25,7 @@ import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Document = {
   id: string;
@@ -65,6 +66,7 @@ export default function DocumentList({
   departments?: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const { permissions } = usePermissions(currentUserRole);
   const [documents, setDocuments] = useState<Document[]>(initialDocuments);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
@@ -126,6 +128,10 @@ export default function DocumentList({
     doc: null,
   });
 
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+
   const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
     "แบบฟอร์ม",
     "ประกาศ",
@@ -140,6 +146,34 @@ export default function DocumentList({
       setSavedDocTypes(JSON.parse(loadedDocTypes));
     }
   }, []);
+
+  const handleCreateFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+
+    setIsCreatingFolder(true);
+    try {
+      const res = await fetch("/api/departments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newFolderName.trim() }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to create folder");
+      }
+
+      toast.success("สร้างหมวดหมู่สำเร็จ");
+      setShowCreateFolderModal(false);
+      setNewFolderName("");
+      window.location.reload();
+    } catch (error: any) {
+      toast.error(error.message || "เกิดข้อผิดพลาดในการสร้างหมวดหมู่");
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
 
   const handleSaveEditDocType = () => {
     if (!editModal.documentType.trim()) return;
@@ -156,18 +190,30 @@ export default function DocumentList({
 
   const folders = useMemo(() => {
     const deptMap = new Map<string, number>();
+
+    // Initialize all departments with 0 count
+    if (departments && departments.length > 0) {
+      departments.forEach((dept) => {
+        deptMap.set(dept.name, 0);
+      });
+    }
+
     documents.forEach((doc) => {
       const deptName = doc.department?.name || "ทั่วไป / ไม่ระบุแผนก";
-      deptMap.set(deptName, (deptMap.get(deptName) || 0) + 1);
+      if (deptMap.has(deptName)) {
+        deptMap.set(deptName, deptMap.get(deptName)! + 1);
+      } else {
+        deptMap.set(deptName, 1);
+      }
     });
     return Array.from(deptMap.entries())
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => {
         if (a.name === "ทั่วไป / ไม่ระบุแผนก") return 1;
         if (b.name === "ทั่วไป / ไม่ระบุแผนก") return -1;
-        return a.name.localeCompare(b.name);
+        return a.name.localeCompare(b.name, "th");
       });
-  }, [documents]);
+  }, [documents, departments]);
 
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
@@ -404,6 +450,18 @@ export default function DocumentList({
           >
             <List size={16} /> รายการทั้งหมด
           </button>
+          
+          {currentUserRole === "SUPER_ADMIN" && (
+            <button
+              onClick={() => setShowCreateFolderModal(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border
+                bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 
+                dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 dark:hover:bg-blue-500/30
+              `}
+            >
+              <Folder size={16} /> สร้างหมวดหมู่
+            </button>
+          )}
         </div>
       </div>
 
@@ -779,19 +837,22 @@ export default function DocumentList({
 
                                       {(doc.uploader.name === currentUserId ||
                                         currentUserRole === "SUPER_ADMIN" ||
-                                        currentUserRole ===
-                                          "DEPARTMENT_HEAD") && (
-                                        <>
-                                          <button
-                                            onClick={() => handleEditClick(doc)}
-                                            className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                                            title="แก้ไขข้อมูลเอกสาร"
-                                          >
-                                            <Edit size={18} />
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              handleDeleteClick(
+                                        permissions?.doc_edit) && (
+                                        <button
+                                          onClick={() => handleEditClick(doc)}
+                                          className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                                          title="แก้ไขข้อมูลเอกสาร"
+                                        >
+                                          <Edit size={18} />
+                                        </button>
+                                      )}
+                                      
+                                      {(doc.uploader.name === currentUserId ||
+                                        currentUserRole === "SUPER_ADMIN" ||
+                                        permissions?.doc_delete) && (
+                                        <button
+                                          onClick={() =>
+                                            handleDeleteClick(
                                                 doc.id,
                                                 doc.title,
                                               )
@@ -801,7 +862,6 @@ export default function DocumentList({
                                           >
                                             <Trash2 size={18} />
                                           </button>
-                                        </>
                                       )}
                                     </div>
                                   </td>
@@ -1097,6 +1157,54 @@ export default function DocumentList({
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Folder Modal */}
+      {showCreateFolderModal && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-xl font-bold text-slate-800 dark:text-white">
+                สร้างหมวดหมู่เอกสารใหม่
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                กำหนดชื่อแผนกหรือหมวดหมู่เอกสาร
+              </p>
+            </div>
+            <form onSubmit={handleCreateFolder} className="p-6 space-y-4 bg-slate-50 dark:bg-slate-800">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  ชื่อหมวดหมู่
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
+                  placeholder="เช่น แผนกบัญชี, จัดซื้อ..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-2 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateFolderModal(false)}
+                  className="px-4 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingFolder || !newFolderName.trim()}
+                  className="px-4 py-2.5 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isCreatingFolder ? "กำลังสร้าง..." : "บันทึก"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

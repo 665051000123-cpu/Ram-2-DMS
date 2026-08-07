@@ -62,8 +62,8 @@ export default function ForcePasswordChange() {
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <ShieldAlert size={120} />
           </div>
-          <div className="w-20 h-20 bg-white dark:bg-slate-900 transition-colors/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <KeyRound size={40} className="text-white" />
+          <div className="w-20 h-20 bg-white/20 dark:bg-slate-900/40 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <KeyRound size={40} className="text-white drop-shadow-md" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2 relative z-10">
             เปลี่ยนรหัสผ่าน

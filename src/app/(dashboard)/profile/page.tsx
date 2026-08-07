@@ -137,7 +137,7 @@ export default function ProfilePage() {
                   <span className="text-slate-800 dark:text-white font-medium">
                     {session.user.role === "SUPER_ADMIN"
                       ? "Super Admin"
-                      : session.user.role === "DEPARTMENT_HEAD"
+                      : session.user.role === "DEPT_HEAD"
                         ? "หัวหน้าแผนก"
                         : "เจ้าหน้าที่"}
                   </span>

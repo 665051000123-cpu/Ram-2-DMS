@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { getRolePermissions } from "@/lib/server-permissions";
 import UserList from "@/components/UserList";
 
 export default async function UsersPage() {
@@ -11,11 +12,9 @@ export default async function UsersPage() {
     redirect("/login");
   }
 
-  // อนุญาตแค่ Admin หรือ Department Head เข้าหน้านี้
-  if (
-    session.user.role !== "SUPER_ADMIN" &&
-    session.user.role !== "DEPARTMENT_HEAD"
-  ) {
+  const permissions = await getRolePermissions(session.user.role);
+
+  if (!permissions.menu_users) {
     return (
       <div className="p-6 text-center mt-20">
         <h1 className="text-2xl font-bold text-red-600 dark:text-red-300">
@@ -28,7 +27,7 @@ export default async function UsersPage() {
     );
   }
 
-  // ถ้าเป็น SUPER_ADMIN ให้ดึงทั้งหมด ถ้าเป็น DEPARTMENT_HEAD ให้ดึงเฉพาะแผนกตัวเอง
+  // ถ้าเป็น SUPER_ADMIN ให้ดึงทั้งหมด ถ้าเป็น DEPT_HEAD ให้ดึงเฉพาะแผนกตัวเอง
   const whereClause =
     session.user.role === "SUPER_ADMIN"
       ? {}
@@ -46,7 +45,7 @@ export default async function UsersPage() {
 
   const users = usersRaw.map((u) => ({
     ...u,
-    role: u.role === "DEPT_HEAD" ? "DEPARTMENT_HEAD" : u.role,
+    role: u.role === "DEPT_HEAD" ? "DEPT_HEAD" : u.role,
   }));
 
   const departments = await prisma.department.findMany({

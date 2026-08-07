@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import DepartmentSettings from "@/components/DepartmentSettings";
 import StorageSettings from "@/components/StorageSettings";
 
+import RolePermissionSettings from "@/components/RolePermissionSettings";
+
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
 
@@ -47,6 +49,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
+      <RolePermissionSettings />
       <StorageSettings />
       <DepartmentSettings initialDepartments={departments} />
     </div>

@@ -95,6 +95,7 @@ export async function POST(req: Request) {
         fileUrl,
         fileType: file.type,
         fileSize: buffer.length,
+        storagePath: baseUploadDir, // Save the physical location
         tags: tags || "",
         documentType: documentType || null,
         currentVersion: 1,
@@ -107,6 +108,7 @@ export async function POST(req: Request) {
             fileUrl,
             fileType: file.type,
             fileSize: buffer.length,
+            storagePath: baseUploadDir, // Save the physical location for this version
             uploaderId: session.user.id,
           },
         },
