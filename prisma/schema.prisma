@@ -64,6 +64,7 @@ model Document {
   fileUrl      String     // URL หรือที่เก็บไฟล์ในระบบ
   fileType     String     // เช่น 'application/pdf', 'image/jpeg'
   fileSize     Int        @default(0) // ขนาดไฟล์เป็น byte
+  extractedText String?   @db.LongText // ข้อความที่สกัดจากไฟล์ (OCR/PDF Parsing)
   tags         String     // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
   documentType String?    // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
   currentVersion Int      @default(1)
@@ -95,6 +96,7 @@ model DocumentVersion {
   fileUrl      String
   fileType     String
   fileSize     Int        @default(0)
+  extractedText String?   @db.LongText
   uploaderId   String
   uploader     User       @relation(fields: [uploaderId], references: [id])
   createdAt    DateTime   @default(now())
@@ -151,4 +153,11 @@ model Notification {
   isRead    Boolean  @default(false)
   link      String?
   createdAt DateTime @default(now())
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }

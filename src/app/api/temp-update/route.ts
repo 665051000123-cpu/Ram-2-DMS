@@ -1,24 +1,24 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const email = '000000';
-    const newDeptName = 'แผนก Dev';
+    const email = "000000";
+    const newDeptName = "แผนก Dev";
 
     let dept = await prisma.department.findUnique({
-      where: { name: newDeptName }
+      where: { name: newDeptName },
     });
 
     if (!dept) {
       dept = await prisma.department.create({
-        data: { name: newDeptName }
+        data: { name: newDeptName },
       });
     }
 
     const updatedUser = await prisma.user.update({
       where: { email },
-      data: { departmentId: dept.id }
+      data: { departmentId: dept.id },
     });
 
     return NextResponse.json({ success: true, updatedUser });

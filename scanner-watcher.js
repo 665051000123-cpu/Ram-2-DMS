@@ -50,11 +50,21 @@ watcher.on('add', async (filePath) => {
     const admin = await getAdminUser();
     
     // 2. Prepare Upload Destination
+    let baseUploadDir = path.join(__dirname, 'public', 'uploads');
+    try {
+      const setting = await prisma.systemSetting.findUnique({ where: { key: 'UPLOAD_DIR' } });
+      if (setting && setting.value) {
+        baseUploadDir = setting.value;
+      }
+    } catch (e) {
+      console.error('Failed to fetch UPLOAD_DIR from DB, using default:', e.message);
+    }
+
     const fileExtension = fileName.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
     const deptFolderName = admin.department.name.replace(/[^a-zA-Z0-9-_\u0E00-\u0E7F]/g, '_');
     
-    const uploadDir = path.join(__dirname, 'public', 'uploads', deptFolderName);
+    const uploadDir = path.join(baseUploadDir, deptFolderName);
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
