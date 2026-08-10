@@ -52,6 +52,37 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Feature Toggles Check
+    const settings = await prisma.systemSetting.findMany({
+      where: { key: { in: ["STRICT_FILE_VALIDATION", "ENABLE_AUTO_OCR"] } }
+    });
+    const settingsMap = settings.reduce((acc: any, s) => { acc[s.key] = s.value === "true"; return acc; }, {});
+    const isStrictValidation = settingsMap["STRICT_FILE_VALIDATION"] || false;
+    const isAutoOcr = settingsMap["ENABLE_AUTO_OCR"] || false;
+
+    // Strict File Validation (Magic Bytes)
+    if (isStrictValidation) {
+      const headerHex = buffer.toString('hex', 0, 4).toUpperCase();
+      let isValid = false;
+      
+      // Basic magic bytes mapping
+      if (file.type === 'application/pdf' && headerHex === '25504446') isValid = true;
+      else if ((file.type === 'image/jpeg' || file.type === 'image/jpg') && headerHex.startsWith('FFD8FF')) isValid = true;
+      else if (file.type === 'image/png' && headerHex === '89504E47') isValid = true;
+      else if (file.type.includes('wordprocessingml') || file.type.includes('spreadsheetml') || file.type.includes('presentationml')) {
+        // Office formats (ZIP based) start with 504B0304
+        if (headerHex === '504B0304') isValid = true;
+      } else {
+        // If it's another type, we just pass it or we could strictly block. 
+        // For DMS, let's pass other types if they are not claiming to be PDF/JPG/PNG/Office
+        isValid = true;
+      }
+
+      if (!isValid) {
+        return NextResponse.json({ error: "ไฟล์ไม่ถูกต้อง (นามสกุลไฟล์ไม่ตรงกับเนื้อหาไฟล์จริง)" }, { status: 400 });
+      }
+    }
+
     // Create unique filename
     const fileExtension = file.name.split(".").pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
@@ -174,46 +205,48 @@ export async function POST(req: Request) {
     }
 
     // --- Background OCR / Text Extraction ---
-    (async () => {
-      try {
-        let extractedText = "";
-        if (file.type === "application/pdf") {
-          const pdfParse = require("pdf-parse");
-          const data = await pdfParse(buffer);
-          extractedText = data.text;
-        } else if (file.type.startsWith("image/")) {
-          const { createWorker } = require("tesseract.js");
-          // tesseract.js v5 createWorker usage:
-          const worker = await createWorker("tha+eng");
-          const {
-            data: { text },
-          } = await worker.recognize(buffer);
-          extractedText = text;
-          await worker.terminate();
-        }
+    if (isAutoOcr) {
+      (async () => {
+        try {
+          let extractedText = "";
+          if (file.type === "application/pdf") {
+            const pdfParse = require("pdf-parse");
+            const data = await pdfParse(buffer);
+            extractedText = data.text;
+          } else if (file.type.startsWith("image/")) {
+            const { createWorker } = require("tesseract.js");
+            // tesseract.js v5 createWorker usage:
+            const worker = await createWorker("tha+eng");
+            const {
+              data: { text },
+            } = await worker.recognize(buffer);
+            extractedText = text;
+            await worker.terminate();
+          }
 
-        if (extractedText && extractedText.trim().length > 0) {
-          await prisma.document.update({
-            where: { id: newDocument.id },
-            data: { extractedText },
-          });
-
-          const latestVersion = await prisma.documentVersion.findFirst({
-            where: { documentId: newDocument.id },
-            orderBy: { version: "desc" },
-          });
-
-          if (latestVersion) {
-            await prisma.documentVersion.update({
-              where: { id: latestVersion.id },
+          if (extractedText && extractedText.trim().length > 0) {
+            await prisma.document.update({
+              where: { id: newDocument.id },
               data: { extractedText },
             });
+
+            const latestVersion = await prisma.documentVersion.findFirst({
+              where: { documentId: newDocument.id },
+              orderBy: { version: "desc" },
+            });
+
+            if (latestVersion) {
+              await prisma.documentVersion.update({
+                where: { id: latestVersion.id },
+                data: { extractedText },
+              });
+            }
           }
+        } catch (ocrError) {
+          console.error("OCR/Extraction Background Error:", ocrError);
         }
-      } catch (ocrError) {
-        console.error("OCR/Extraction Background Error:", ocrError);
-      }
-    })();
+      })();
+    }
 
     return NextResponse.json(
       { success: true, document: newDocument },

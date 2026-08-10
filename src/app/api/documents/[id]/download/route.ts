@@ -125,24 +125,59 @@ export async function GET(
       );
     }
 
-    const stat = fs.statSync(filePath);
-    const fileStream = fs.createReadStream(filePath) as any;
-
     const ext = path.extname(filePath).toLowerCase() || (document.fileType === 'application/pdf' ? '.pdf' : '');
     const filename = `${document.title}${ext}`;
-    
-    // Encode filename for Content-Disposition to support Thai characters
     const encodedFilename = encodeURIComponent(filename).replace(/['()]/g, escape).replace(/\*/g, '%2A');
-
     const headers = new Headers();
-    headers.set("Content-Type", document.fileType || "application/octet-stream");
-    headers.set("Content-Length", stat.size.toString());
     
     if (isView) {
       headers.set("Content-Disposition", `inline; filename*=UTF-8''${encodedFilename}`);
     } else {
       headers.set("Content-Disposition", `attachment; filename*=UTF-8''${encodedFilename}`);
     }
+
+    // Check Watermark Setting
+    const watermarkSetting = await prisma.systemSetting.findUnique({ where: { key: "ENABLE_PDF_WATERMARK" } });
+    const isWatermarkEnabled = watermarkSetting?.value === "true";
+    const isPdf = document.fileType === "application/pdf" || ext === ".pdf";
+    const isPrivate = document.visibility === "PRIVATE";
+
+    if (isWatermarkEnabled && isPdf && isPrivate) {
+      try {
+        const fileBuffer = fs.readFileSync(filePath);
+        const pdfDoc = await PDFDocument.load(fileBuffer);
+        const pages = pdfDoc.getPages();
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const watermarkText = `Confidential - Downloaded by ${session.user.name} - ${new Date().toLocaleString('th-TH')}`;
+        
+        pages.forEach((page) => {
+          const { width, height } = page.getSize();
+          page.drawText(watermarkText, {
+            x: 50,
+            y: 50,
+            size: 14,
+            font,
+            color: rgb(0.85, 0.2, 0.2),
+            opacity: 0.5,
+            rotate: degrees(45),
+          });
+        });
+
+        const modifiedPdfBytes = await pdfDoc.save();
+        headers.set("Content-Type", "application/pdf");
+        headers.set("Content-Length", modifiedPdfBytes.length.toString());
+        return new NextResponse(modifiedPdfBytes, { headers });
+      } catch (err) {
+        console.error("Failed to watermark PDF:", err);
+        // Fallback to normal stream if watermark fails
+      }
+    }
+
+    // Normal Download without Watermark
+    const stat = fs.statSync(filePath);
+    const fileStream = fs.createReadStream(filePath) as any;
+    headers.set("Content-Type", document.fileType || "application/octet-stream");
+    headers.set("Content-Length", stat.size.toString());
 
     return new NextResponse(fileStream, { headers });
   } catch (error) {

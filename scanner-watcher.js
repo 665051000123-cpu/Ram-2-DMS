@@ -123,9 +123,31 @@ watcher.on('add', async (filePath) => {
 
     console.log(`[Success] Document saved as "${titleWithoutExt}" and assigned to ${admin.name} (PRIVATE).`);
     
+    // 7. Check if Auto OCR is enabled and trigger it
+    try {
+      const ocrSetting = await prisma.systemSetting.findUnique({ where: { key: 'ENABLE_AUTO_OCR' } });
+      if (ocrSetting && ocrSetting.value === 'true') {
+        console.log(`[OCR] Triggering OCR for document ${newDocument.id}...`);
+        // Using global fetch (Node 18+)
+        fetch('http://localhost:5175/api/internal/ocr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: newDocument.id })
+        }).then(res => res.json())
+          .then(data => {
+             if (data.success) console.log(`[OCR] Success for document ${newDocument.id}`);
+             else console.error(`[OCR Error]`, data.error);
+          })
+          .catch(err => console.error(`[OCR Request Error] Trigger failed:`, err.message));
+      }
+    } catch (e) {
+      console.error(`[OCR Setup Error] Failed to check OCR setting:`, e.message);
+    }
+    
   } catch (error) {
     console.error(`[Error] Failed to process ${fileName}:`, error.message);
   }
 });
 
 watcher.on('error', error => console.error(`Watcher error: ${error}`));
+

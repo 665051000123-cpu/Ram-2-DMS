@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import DepartmentSettings from "@/components/DepartmentSettings";
 import StorageSettings from "@/components/StorageSettings";
-
+import FeatureSettings from "@/components/FeatureSettings";
 import RolePermissionSettings from "@/components/RolePermissionSettings";
 
 export default async function SettingsPage() {
@@ -49,6 +49,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
+      <FeatureSettings />
       <RolePermissionSettings />
       <StorageSettings />
       <DepartmentSettings initialDepartments={departments} />
