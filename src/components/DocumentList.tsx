@@ -20,11 +20,14 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
+  Building2,
+  Shield,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
+import FolderAccessModal from "./FolderAccessModal";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type Document = {
@@ -34,9 +37,14 @@ type Document = {
   fileUrl: string;
   fileType: string;
   tags: string;
-  visibility: string;
+  documentCode?: string | null;
+  retentionPeriod?: Date | null;
+  isExpired?: boolean;
+  departmentId?: string;
+  department?: { id: string, name: string };
   currentVersion?: number;
   documentType?: string | null;
+  fileSize?: number;
   favoritedBy?: { userId: string }[];
   versions?: {
     version: number;
@@ -49,35 +57,74 @@ type Document = {
   uploader: {
     name: string;
   };
-  department?: {
+  folder?: {
+    id: string;
     name: string;
   };
+};
+
+const formatFileSize = (bytes?: number) => {
+  if (bytes === undefined || bytes === null || bytes === 0) return "-";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
 export default function DocumentList({
   initialDocuments,
   currentUserId,
   currentUserRole,
+  currentUserDepartmentId,
+  folders = [],
   departments = [],
 }: {
   initialDocuments: Document[];
   currentUserId: string;
   currentUserRole: string;
-  departments?: { id: string; name: string }[];
+  currentUserDepartmentId?: string | null;
+  folders?: { id: string; name: string; parentId: string | null; description: string | null; departmentId: string | null; }[];
+  departments?: { id: string; name: string; }[];
 }) {
   const router = useRouter();
   const { permissions } = usePermissions(currentUserRole);
   const [documents, setDocuments] = useState<Document[]>(initialDocuments);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState("ALL");
+  const [filterFolder, setFilterFolder] = useState("ALL");
   const [filterType, setFilterType] = useState("ALL");
 
   const [deepSearchDocs, setDeepSearchDocs] = useState<string[] | null>(null);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
 
   const [viewMode, setViewMode] = useState<"folder" | "list">("folder");
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<{ id: string; name: string; type: "department" | "folder" }[]>([]);
+
+  const searchParams = useSearchParams();
+  const folderIdParam = searchParams.get('folderId');
+
+  useEffect(() => {
+    if (folderIdParam && folders && folders.length > 0 && departments && departments.length > 0) {
+      const targetFolder = folders.find(f => f.id === folderIdParam);
+      if (targetFolder) {
+        const dept = departments.find(d => d.id === targetFolder.departmentId);
+        if (dept) {
+          const path: { id: string, name: string, type: "department" | "folder" }[] = [{ id: dept.id, name: dept.name, type: "department" }];
+          
+          if (targetFolder.parentId) {
+            const parent = folders.find(f => f.id === targetFolder.parentId);
+            if (parent) {
+               path.push({ id: parent.id, name: parent.name, type: "folder" });
+            }
+          }
+          
+          path.push({ id: targetFolder.id, name: targetFolder.name, type: "folder" });
+          setCurrentPath(path);
+          setViewMode("folder");
+        }
+      }
+    }
+  }, [folderIdParam, folders, departments]);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -96,7 +143,8 @@ export default function DocumentList({
     description: string;
     tags: string;
     documentType: string;
-    visibility: string;
+    documentCode: string;
+    retentionPeriod: string;
     file: File | null;
   }>({
     isOpen: false,
@@ -105,7 +153,8 @@ export default function DocumentList({
     description: "",
     tags: "",
     documentType: "",
-    visibility: "DEPARTMENT",
+    documentCode: "",
+    retentionPeriod: "",
     file: null,
   });
   const [isEditing, setIsEditing] = useState(false);
@@ -132,6 +181,16 @@ export default function DocumentList({
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
+  const [manageAccessModal, setManageAccessModal] = useState<{
+    isOpen: boolean;
+    folderId: string;
+    folderName: string;
+  }>({
+    isOpen: false,
+    folderId: "",
+    folderName: "",
+  });
+
   const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
     "แบบฟอร์ม",
     "ประกาศ",
@@ -153,10 +212,29 @@ export default function DocumentList({
 
     setIsCreatingFolder(true);
     try {
-      const res = await fetch("/api/departments", {
+      let departmentId = null;
+      let parentId = null;
+
+      if (currentPath.length > 0) {
+        const firstNode = currentPath[0];
+        if (firstNode.type === "department") {
+          departmentId = firstNode.id;
+        }
+
+        const currentNode = currentPath[currentPath.length - 1];
+        if (currentNode.type === "folder") {
+          parentId = currentNode.id;
+        }
+      }
+
+      const res = await fetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newFolderName.trim() }),
+        body: JSON.stringify({ 
+          name: newFolderName.trim(),
+          departmentId,
+          parentId
+        }),
       });
 
       if (!res.ok) {
@@ -188,32 +266,32 @@ export default function DocumentList({
     }
   };
 
-  const folders = useMemo(() => {
-    const deptMap = new Map<string, number>();
+  const folderStats = useMemo(() => {
+    const folderMap = new Map<string, { id: string, name: string, count: number }>();
 
-    // Initialize all departments with 0 count
-    if (departments && departments.length > 0) {
-      departments.forEach((dept) => {
-        deptMap.set(dept.name, 0);
+    if (folders && folders.length > 0) {
+      folders.forEach((f) => {
+        folderMap.set(f.id, { id: f.id, name: f.name, count: 0 });
       });
     }
 
     documents.forEach((doc) => {
-      const deptName = doc.department?.name || "ทั่วไป / ไม่ระบุแผนก";
-      if (deptMap.has(deptName)) {
-        deptMap.set(deptName, deptMap.get(deptName)! + 1);
+      const folderId = doc.folder?.id || "unknown";
+      const folderName = doc.folder?.name || "เอกสารทั่วไป (ไม่มีแฟ้ม)";
+      if (folderMap.has(folderId)) {
+        folderMap.get(folderId)!.count += 1;
       } else {
-        deptMap.set(deptName, 1);
+        folderMap.set(folderId, { id: folderId, name: folderName, count: 1 });
       }
     });
-    return Array.from(deptMap.entries())
-      .map(([name, count]) => ({ name, count }))
+
+    return Array.from(folderMap.values())
       .sort((a, b) => {
-        if (a.name === "ทั่วไป / ไม่ระบุแผนก") return 1;
-        if (b.name === "ทั่วไป / ไม่ระบุแผนก") return -1;
+        if (a.id === "unknown") return 1;
+        if (b.id === "unknown") return -1;
         return a.name.localeCompare(b.name, "th");
       });
-  }, [documents, departments]);
+  }, [documents, folders]);
 
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
@@ -236,10 +314,10 @@ export default function DocumentList({
         matchesDate = docDate === filterDate;
       }
 
-      // 3. Department Filter
-      let matchesDept = true;
-      if (filterDepartment !== "ALL") {
-        matchesDept = doc.department?.name === filterDepartment;
+      // 3. Folder Filter
+      let matchesFolder = true;
+      if (filterFolder !== "ALL") {
+        matchesFolder = doc.folder?.id === filterFolder;
       }
 
       // 4. Type Filter
@@ -248,17 +326,10 @@ export default function DocumentList({
         matchesType = doc.documentType === filterType;
       }
 
-      // 5. Folder Filter (List View Mode inside a Folder)
-      let matchesFolder = true;
-      if (selectedFolder) {
-        matchesFolder =
-          (doc.department?.name || "ทั่วไป / ไม่ระบุแผนก") === selectedFolder;
-      }
 
       return (
         matchesSearch &&
         matchesDate &&
-        matchesDept &&
         matchesType &&
         matchesFolder
       );
@@ -267,9 +338,9 @@ export default function DocumentList({
     documents,
     searchTerm,
     filterDate,
-    filterDepartment,
+    filterFolder,
     filterType,
-    selectedFolder,
+    currentPath,
     deepSearchDocs,
   ]);
 
@@ -360,7 +431,8 @@ export default function DocumentList({
       description: doc.description || "",
       tags: doc.tags || "",
       documentType: doc.documentType || "",
-      visibility: doc.visibility || "DEPARTMENT",
+      documentCode: doc.documentCode || "",
+      retentionPeriod: doc.retentionPeriod ? new Date(doc.retentionPeriod).toISOString().split('T')[0] : "",
       file: null,
     });
   };
@@ -375,7 +447,8 @@ export default function DocumentList({
       formData.append("description", editModal.description);
       formData.append("tags", editModal.tags);
       formData.append("documentType", editModal.documentType);
-      formData.append("visibility", editModal.visibility);
+      formData.append("documentCode", editModal.documentCode);
+      formData.append("retentionPeriod", editModal.retentionPeriod);
       if (editModal.file) {
         formData.append("file", editModal.file);
       }
@@ -411,47 +484,40 @@ export default function DocumentList({
       {/* 1. ส่วนหัวและสลับมุมมอง */}
       <div className="p-4 md:p-6 border-b border-slate-200 dark:border-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white">
-            {viewMode === "folder" && !selectedFolder
-              ? "หมวดหมู่เอกสาร"
-              : "รายการเอกสาร"}
+          <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-1 flex-wrap">
+            {viewMode === "folder" ? (
+              <>
+                <span 
+                  className={currentPath.length === 0 ? "" : "text-slate-500 cursor-pointer hover:text-blue-500"} 
+                  onClick={() => setCurrentPath([])}
+                >
+                  หน้าหลัก
+                </span>
+                {currentPath.map((path, index) => (
+                  <React.Fragment key={`bc-${path.id}`}>
+                    <ChevronRight size={18} className="text-slate-400 mt-0.5" />
+                    <span 
+                      className={index === currentPath.length - 1 ? "" : "text-slate-500 cursor-pointer hover:text-blue-500"}
+                      onClick={() => setCurrentPath(currentPath.slice(0, index + 1))}
+                    >
+                      {path.type === 'department' ? `แผนก ${path.name}` : path.name}
+                    </span>
+                  </React.Fragment>
+                ))}
+              </>
+            ) : (
+              "รายการเอกสารทั้งหมด"
+            )}
           </h2>
           <p className="text-sm text-slate-500 dark:text-white mt-1">
-            {viewMode === "folder" && !selectedFolder
-              ? `พบ ${folders.length} แผนกหมวดหมู่`
+            {viewMode === "folder"
+              ? currentPath.length === 0 ? `พบ ${departments?.length || 0} แผนกหมวดหมู่` : ''
               : `พบเอกสารทั้งหมด ${filteredDocs.length} รายการ`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-200 dark:bg-slate-700 transition-colors p-1 rounded-xl">
-          <button
-            onClick={() => {
-              setViewMode("folder");
-              setSelectedFolder(null);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              viewMode === "folder"
-                ? "bg-white dark:bg-slate-900 transition-colors text-blue-600 dark:text-blue-300 shadow-sm"
-                : "text-slate-600 dark:text-white hover:bg-slate-300/50"
-            }`}
-          >
-            <LayoutGrid size={16} /> โฟลเดอร์
-          </button>
-          <button
-            onClick={() => {
-              setViewMode("list");
-              setSelectedFolder(null);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              viewMode === "list"
-                ? "bg-white dark:bg-slate-900 transition-colors text-blue-600 dark:text-blue-300 shadow-sm"
-                : "text-slate-600 dark:text-white hover:bg-slate-300/50"
-            }`}
-          >
-            <List size={16} /> รายการทั้งหมด
-          </button>
-          
-          {currentUserRole === "SUPER_ADMIN" && (
+        <div className="flex items-center gap-2">
+          {(currentUserRole === "SUPER_ADMIN" || (currentUserRole === "DEPT_HEAD" && currentPath.length > 0)) && (
             <button
               onClick={() => setShowCreateFolderModal(true)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border
@@ -459,62 +525,16 @@ export default function DocumentList({
                 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 dark:hover:bg-blue-500/30
               `}
             >
-              <Folder size={16} /> สร้างหมวดหมู่
+              <Folder size={16} /> {currentPath.length === 0 ? "สร้างหมวดหมู่" : "สร้างแฟ้มย่อย"}
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. เนื้อหา (Folder Grid OR Document List) */}
-
-      {viewMode === "folder" && !selectedFolder ? (
-        // ================= FOLDER GRID VIEW =================
-        <div className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {folders.map((folder) => (
-              <button
-                key={folder.name}
-                onClick={() => setSelectedFolder(folder.name)}
-                className="flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 transition-colors border border-slate-200 dark:border-slate-600 rounded-2xl hover:border-blue-300 hover:shadow-md hover:bg-blue-50 dark:hover:bg-blue-500/20/30 transition-all group"
-              >
-                <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-500/20 text-blue-500 dark:text-blue-300 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Folder
-                    size={32}
-                    fill="currentColor"
-                    className="opacity-20 absolute"
-                  />
-                  <Folder size={32} className="relative z-10" />
-                </div>
-                <h3 className="font-bold text-slate-800 dark:text-white text-center line-clamp-1">
-                  {folder.name}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-white mt-1">
-                  {folder.count} เอกสาร
-                </p>
-              </button>
-            ))}
-          </div>
-          {folders.length === 0 && (
-            <div className="py-16 text-center text-slate-400 dark:text-white">
-              <Folder size={48} className="mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-medium">ไม่มีหมวดหมู่เอกสาร</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        // ================= DOCUMENT LIST VIEW =================
-        <>
-          {/* Filters Toolbar */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col md:flex-row gap-4 items-center">
-            {selectedFolder && (
-              <button
-                onClick={() => setSelectedFolder(null)}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors dark:bg-slate-700 transition-colors text-slate-700 dark:text-white font-medium rounded-xl transition whitespace-nowrap"
-              >
-                <ArrowLeft size={18} />
-                กลับไปโฟลเดอร์
-              </button>
-            )}
+      {/* 2. เนื้อหา (Document List & Folders) */}
+      <>
+        {/* Filters Toolbar */}
+        <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col md:flex-row gap-4 items-center">
 
             {/* Search */}
             <div className="relative flex-1 w-full flex items-center gap-2">
@@ -524,159 +544,251 @@ export default function DocumentList({
                 </div>
                 <input
                   type="text"
-                  placeholder="ค้นหาชื่อเอกสาร หรือ Tags..."
+                  placeholder={currentPath.length === 0 ? "ค้นหาแผนก..." : "ค้นหาชื่อเอกสาร แฟ้มย่อย หรือ Tags..."}
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
                     if (deepSearchDocs !== null) setDeepSearchDocs(null); // Reset deep search on change
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleDeepSearch();
+                    if (currentPath.length > 0 && e.key === "Enter") handleDeepSearch();
                   }}
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
                 />
               </div>
-              <button
-                onClick={handleDeepSearch}
-                disabled={isDeepSearching || !searchTerm.trim()}
-                className="px-4 py-2.5 bg-slate-800 dark:bg-slate-800 text-white font-medium rounded-xl hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed whitespace-nowrap shadow-sm flex items-center gap-2"
-                title="ค้นหาลึกลงไปถึงเนื้อหาด้านในเอกสาร (OCR/PDF)"
-              >
-                {isDeepSearching ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                ) : (
-                  <Search size={16} />
-                )}
-                <span className="hidden sm:inline">ค้นหาเนื้อหา</span>
-              </button>
+              {currentPath.length > 0 && (
+                <button
+                  onClick={handleDeepSearch}
+                  disabled={isDeepSearching || !searchTerm.trim()}
+                  className="px-4 py-2.5 bg-slate-800 dark:bg-slate-800 text-white font-medium rounded-xl hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed whitespace-nowrap shadow-sm flex items-center gap-2"
+                  title="ค้นหาลึกลงไปถึงเนื้อหาด้านในเอกสาร (OCR/PDF)"
+                >
+                  {isDeepSearching ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  ) : (
+                    <Search size={16} />
+                  )}
+                  <span className="hidden sm:inline">ค้นหาเนื้อหา</span>
+                </button>
+              )}
             </div>
 
             {/* Document Type Filter */}
-            <div className="md:w-48 relative">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
-              >
-                <option value="ALL">ทุกประเภท</option>
-                {savedDocTypes.map((type, idx) => (
-                  <option key={idx} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
-              </div>
-            </div>
-
-            {/* Date Filter */}
-            <div className="md:w-48 relative">
-              <input
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
-              />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Calendar className="h-4 w-4 text-slate-400 dark:text-white" />
-              </div>
-            </div>
-
-            {/* Department Filter (Only for SUPER_ADMIN) */}
-            {currentUserRole === "SUPER_ADMIN" && departments.length > 0 && (
+            {currentPath.length > 0 && (
               <div className="md:w-48 relative">
                 <select
-                  value={filterDepartment}
-                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                 >
-                  <option value="ALL">แผนกทั้งหมด</option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.name}>
-                      {dept.name}
+                  <option value="ALL">ทุกประเภท</option>
+                  {savedDocTypes.map((type, idx) => (
+                    <option key={idx} value={type}>
+                      {type}
                     </option>
                   ))}
                 </select>
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-4 w-4 text-slate-400 dark:text-white" />
+                  <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
                 </div>
               </div>
             )}
+
+            {/* Date Filter */}
+            {currentPath.length > 0 && (
+              <div className="md:w-48 relative group">
+                <input
+                  type="text"
+                  readOnly
+                  value={filterDate ? format(new Date(filterDate), "dd/MM/yyyy") : ""}
+                  placeholder="วว/ดด/ปปปป"
+                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm cursor-pointer"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Calendar className="h-4 w-4 text-slate-400 dark:text-white" />
+                </div>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  onClick={(e) => {
+                    try {
+                      if ('showPicker' in HTMLInputElement.prototype) {
+                        e.currentTarget.showPicker();
+                      }
+                    } catch (err) {}
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+            )}
+
+
           </div>
 
           {/* 2. ตารางแสดงเอกสาร */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
-                  <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
-                  <th className="font-semibold py-4 px-6">Tags</th>
-                  {currentUserRole === "SUPER_ADMIN" && (
-                    <th className="font-semibold py-4 px-6">แผนก</th>
-                  )}
-                  <th className="font-semibold py-4 px-6">ผู้อัปโหลด</th>
-                  <th className="font-semibold py-4 px-6">วันที่</th>
-                  <th className="font-semibold py-4 px-6 text-center">
-                    จัดการ
-                  </th>
-                </tr>
-              </thead>
+              {currentPath.length > 0 && (
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
+                    <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
+                    <th className="font-semibold py-4 px-6">รหัสเอกสาร</th>
+                    <th className="font-semibold py-4 px-6">Tags</th>
+                    {currentUserRole === "SUPER_ADMIN" && (
+                      <th className="font-semibold py-4 px-6">แผนก</th>
+                    )}
+                    <th className="font-semibold py-4 px-6">ผู้อัปโหลด</th>
+                    <th className="font-semibold py-4 px-6">วันที่</th>
+                    <th className="font-semibold py-4 px-6">ขนาดไฟล์</th>
+                    <th className="font-semibold py-4 px-6 text-center">
+                      จัดการ
+                    </th>
+                  </tr>
+                </thead>
+              )}
               <tbody className="divide-y divide-slate-100">
-                {filteredDocs.length > 0 ? (
+                {filteredDocs.length > 0 || (viewMode === "folder" && currentPath.length === 0) ? (
                   (() => {
-                    const groups = new Map<string, typeof documents>();
-                    filteredDocs.forEach((doc) => {
-                      const deptName =
-                        doc.department?.name || "ทั่วไป / ไม่ระบุแผนก";
-                      if (!groups.has(deptName)) groups.set(deptName, []);
-                      groups.get(deptName)!.push(doc);
-                    });
+                    const isFolderView = viewMode === "folder";
+                    
+                    let visibleDepartments: typeof departments = [];
+                    let visibleFolders: typeof folders = [];
+                    let visibleDocs: Document[] = [];
 
-                    const sortedGroups = Array.from(groups.entries()).sort(
-                      (a, b) => {
-                        if (a[0] === "ทั่วไป / ไม่ระบุแผนก") return 1;
-                        if (b[0] === "ทั่วไป / ไม่ระบุแผนก") return -1;
-                        return a[0].localeCompare(b[0]);
-                      },
-                    );
+                    if (!isFolderView) {
+                      visibleDocs = filteredDocs;
+                    } else {
+                      const currentLevel = currentPath.length === 0 ? null : currentPath[currentPath.length - 1];
+                      const searchLower = searchTerm.toLowerCase();
 
-                    return sortedGroups.map(([deptName, groupDocs]) => {
-                      const isSearching = searchTerm.trim().length > 0;
+                      if (!currentLevel) {
+                        visibleDepartments = departments || [];
+                        if (searchTerm) {
+                          visibleDepartments = visibleDepartments.filter(d => 
+                            d.name.toLowerCase().includes(searchLower)
+                          );
+                        }
+                      } else if (currentLevel.type === "department") {
+                        visibleFolders = folders.filter(f => f.departmentId === currentLevel.id && !f.parentId);
+                        if (searchTerm) {
+                          visibleFolders = visibleFolders.filter(f => 
+                            f.name.toLowerCase().includes(searchLower)
+                          );
+                        }
+                        visibleDocs = filteredDocs.filter(d => d.departmentId === currentLevel.id && !d.folder);
+                      } else if (currentLevel.type === "folder") {
+                        visibleFolders = folders.filter(f => f.parentId === currentLevel.id);
+                        if (searchTerm) {
+                          visibleFolders = visibleFolders.filter(f => 
+                            f.name.toLowerCase().includes(searchLower)
+                          );
+                        }
+                        visibleDocs = filteredDocs.filter(d => d.folder?.id === currentLevel.id);
+                      }
+                    }
 
-                      return (
-                        <React.Fragment key={deptName}>
-                          {!selectedFolder && (
-                            <tr
-                              className="bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors dark:bg-slate-700 transition-colors/70 cursor-pointer"
-                              onClick={() => setSelectedFolder(deptName)}
+                    return (
+                      <>
+                        {isFolderView && currentPath.length > 0 && (
+                          <tr
+                            className="bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setCurrentPath(prev => prev.slice(0, -1));
+                            }}
+                          >
+                            <td
+                              colSpan={currentUserRole === "SUPER_ADMIN" ? 7 : 6}
+                              className="py-3 px-6 text-sm font-medium text-slate-600 dark:text-slate-300 border-y border-slate-200 dark:border-slate-700"
                             >
-                              <td
-                                colSpan={
-                                  currentUserRole === "SUPER_ADMIN" ? 6 : 5
-                                }
-                                className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
-                              >
+                              <div className="flex items-center gap-2">
+                                <ArrowLeft size={16} /> กลับไประดับก่อนหน้า
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+
+                        {visibleDepartments?.map((dept) => {
+                          const subFoldersCount = folders.filter(f => f.departmentId === dept.id && !f.parentId).length;
+                          const docsCount = documents.filter(d => d.departmentId === dept.id && !d.folder).length;
+                          return (
+                          <tr
+                            key={`dept-${dept.id}`}
+                            className="bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                            onClick={() => setCurrentPath([{ id: dept.id, name: dept.name, type: "department" }])}
+                          >
+                            <td
+                              colSpan={currentUserRole === "SUPER_ADMIN" ? 7 : 6}
+                              className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <Building2 size={20} className="text-slate-600 dark:text-slate-300" />
+                                  {dept.name}
+                                </div>
+                                <div className="flex items-center gap-4 text-xs font-normal text-slate-500 dark:text-slate-400">
+                                  {subFoldersCount > 0 && <span>{subFoldersCount} แฟ้มย่อย</span>}
+                                  {docsCount > 0 && <span>{docsCount} เอกสาร</span>}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )})}
+
+                        {visibleFolders.map((folder) => {
+                          const subFoldersCount = folders.filter(f => f.parentId === folder.id).length;
+                          const docsCount = documents.filter(d => d.folder?.id === folder.id).length;
+                          return (
+                          <tr
+                            key={`folder-${folder.id}`}
+                            className="bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                            onClick={() => setCurrentPath(prev => [...prev, { id: folder.id, name: folder.name, type: "folder" }])}
+                          >
+                            <td
+                              colSpan={currentUserRole === "SUPER_ADMIN" ? 8 : 7}
+                              className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
+                            >
+                              <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                   <Folder
                                     size={20}
                                     className="text-blue-600 dark:text-blue-300"
                                   />
-                                  {deptName}
-                                  <span className="text-xs font-normal text-slate-500 dark:text-white bg-white dark:bg-slate-900 transition-colors px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
-                                    {groupDocs.length} รายการ
-                                  </span>
+                                  {folder.name}
+                                  {folder.description && (
+                                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-2">
+                                      - {folder.description}
+                                    </span>
+                                  )}
                                 </div>
-                              </td>
-                            </tr>
-                          )}
-                          {(selectedFolder ||
-                            (isSearching && !selectedFolder)) &&
-                            groupDocs.map((doc) => {
-                              const isFavorited =
-                                doc.favoritedBy?.some(
-                                  (f) => f.userId === currentUserId,
-                                ) || false;
+                                <div className="flex items-center gap-4">
+                                  <div className="flex items-center gap-3 text-xs font-normal text-slate-500 dark:text-slate-400">
+                                    {subFoldersCount > 0 && <span>{subFoldersCount} แฟ้มย่อย</span>}
+                                    {docsCount > 0 && <span>{docsCount} เอกสาร</span>}
+                                  </div>
+                                  {currentUserRole === "SUPER_ADMIN" && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setManageAccessModal({ isOpen: true, folderId: folder.id, folderName: folder.name });
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
+                                      title="จัดการสิทธิ์การเข้าถึง"
+                                    >
+                                      <Shield size={16} /> <span className="text-xs ml-1 hidden sm:inline">จัดการสิทธิ์</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )})}
+
+                        {visibleDocs.map((doc) => {
+                          const isFavorited =
+                            doc.favoritedBy?.some(
+                              (f) => f.userId === currentUserId,
+                            ) || false;
 
                               return (
                                 <tr
@@ -716,14 +828,25 @@ export default function DocumentList({
                                         <p className="text-xs text-slate-500 dark:text-white mt-0.5 line-clamp-1">
                                           {doc.description || "-"}
                                         </p>
-                                        {doc.visibility === "PRIVATE" && (
+                                        {doc.departmentId === currentUserDepartmentId ? (
                                           <div className="mt-1">
-                                            <span className="text-[10px] bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
-                                              ส่วนตัว
+                                            <span className="text-[10px] bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full font-medium">
+                                              Master Copy (ต้นฉบับ)
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <div className="mt-1">
+                                            <span className="text-[10px] bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                                              Copy (สำเนา)
                                             </span>
                                           </div>
                                         )}
                                       </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <div className="text-sm font-medium text-slate-700 dark:text-white">
+                                      {doc.documentCode || "-"}
                                     </div>
                                   </td>
                                   <td className="py-4 px-6">
@@ -781,6 +904,11 @@ export default function DocumentList({
                                         new Date(doc.createdAt),
                                         "dd/MM/yyyy HH:mm",
                                       )}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 px-6">
+                                    <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                      {formatFileSize(doc.fileSize)}
                                     </div>
                                   </td>
                                   <td className="py-4 px-6 whitespace-nowrap">
@@ -868,9 +996,8 @@ export default function DocumentList({
                                 </tr>
                               );
                             })}
-                        </React.Fragment>
+                        </>
                       );
-                    });
                   })()
                 ) : (
                   <tr>
@@ -892,7 +1019,6 @@ export default function DocumentList({
             </table>
           </div>
         </>
-      )}
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -927,6 +1053,21 @@ export default function DocumentList({
                     setEditModal({ ...editModal, title: e.target.value })
                   }
                   className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1">
+                  รหัสเอกสาร (ถ้าต้องการแก้ไข)
+                </label>
+                <input
+                  type="text"
+                  value={editModal.documentCode}
+                  onChange={(e) =>
+                    setEditModal({ ...editModal, documentCode: e.target.value })
+                  }
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="ปล่อยว่างเพื่อคงเดิม"
                 />
               </div>
 
@@ -978,21 +1119,16 @@ export default function DocumentList({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1">
-                  สิทธิ์การเข้าถึง (Visibility)
+                  วันที่หมดอายุ / อายุการจัดเก็บ
                 </label>
-                <select
-                  value={editModal.visibility}
+                <input
+                  type="date"
+                  value={editModal.retentionPeriod}
                   onChange={(e) =>
-                    setEditModal({ ...editModal, visibility: e.target.value })
+                    setEditModal({ ...editModal, retentionPeriod: e.target.value })
                   }
                   className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="DEPARTMENT">
-                    เห็นเฉพาะคนในแผนก (DEPARTMENT)
-                  </option>
-                  <option value="PUBLIC">เห็นได้ทุกแผนก (PUBLIC)</option>
-                  <option value="PRIVATE">ส่วนตัว (PRIVATE)</option>
-                </select>
+                />
               </div>
 
               <div>
@@ -1049,8 +1185,8 @@ export default function DocumentList({
 
       {/* View PDF Modal */}
       {viewModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 flex flex-col items-center justify-center z-[60] p-4">
-          <div className="w-full max-w-5xl bg-white dark:bg-slate-900 transition-colors rounded-t-xl p-4 flex justify-between items-center">
+        <div className="fixed inset-0 bg-slate-900 flex flex-col z-[60]">
+          <div className="w-full bg-white dark:bg-slate-900 transition-colors p-4 flex justify-between items-center shadow-sm">
             <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
               <FileText className="text-blue-600 dark:text-blue-300" />
               {viewModal.title}
@@ -1059,12 +1195,12 @@ export default function DocumentList({
               onClick={() =>
                 setViewModal({ isOpen: false, url: "", title: "" })
               }
-              className="p-2 text-slate-400 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 hover:text-red-500 rounded-lg transition"
+              className="p-2 text-slate-400 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 hover:text-red-500 rounded-lg"
             >
               <XCircle size={24} />
             </button>
           </div>
-          <div className="w-full max-w-5xl h-[80vh] bg-slate-100 dark:bg-slate-800 rounded-b-xl overflow-hidden">
+          <div className="w-full flex-1 bg-slate-100 dark:bg-slate-800 overflow-hidden">
             <iframe
               src={viewModal.url}
               className="w-full h-full border-0"
@@ -1167,16 +1303,16 @@ export default function DocumentList({
           <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-xl font-bold text-slate-800 dark:text-white">
-                สร้างหมวดหมู่เอกสารใหม่
+                {currentPath.length === 0 ? "สร้างหมวดหมู่เอกสารใหม่" : "สร้างแฟ้มย่อยใหม่"}
               </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                กำหนดชื่อแผนกหรือหมวดหมู่เอกสาร
+                {currentPath.length === 0 ? "กำหนดชื่อแผนกหรือหมวดหมู่เอกสาร" : "กำหนดชื่อแฟ้มย่อย"}
               </p>
             </div>
             <form onSubmit={handleCreateFolder} className="p-6 space-y-4 bg-slate-50 dark:bg-slate-800">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  ชื่อหมวดหมู่
+                  {currentPath.length === 0 ? "ชื่อหมวดหมู่" : "ชื่อแฟ้มย่อย"}
                 </label>
                 <input
                   type="text"
@@ -1208,6 +1344,12 @@ export default function DocumentList({
           </div>
         </div>
       )}
+      <FolderAccessModal
+        isOpen={manageAccessModal.isOpen}
+        onClose={() => setManageAccessModal({ ...manageAccessModal, isOpen: false })}
+        folderId={manageAccessModal.folderId}
+        folderName={manageAccessModal.folderName}
+      />
     </div>
   );
 }

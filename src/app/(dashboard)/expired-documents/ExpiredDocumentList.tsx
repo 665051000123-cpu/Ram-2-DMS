@@ -2,19 +2,11 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { FileText, RefreshCcw, Trash2 } from "lucide-react";
+import { FileText, Trash, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmModal from "@/components/ConfirmModal";
 
-const formatFileSize = (bytes?: number) => {
-  if (bytes === undefined || bytes === null || bytes === 0) return "-";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-};
-
-export default function RecycleBinList({
+export default function ExpiredDocumentList({
   initialDocuments,
 }: {
   initialDocuments: any[];
@@ -23,7 +15,7 @@ export default function RecycleBinList({
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     docId: string;
-    action: "RESTORE" | "HARD_DELETE" | null;
+    action: "SOFT_DELETE" | "HARD_DELETE" | null;
   }>({
     isOpen: false,
     docId: "",
@@ -37,16 +29,18 @@ export default function RecycleBinList({
     if (!docId || !action) return;
 
     try {
-      const url = `/api/documents/${docId}/${action === "RESTORE" ? "restore" : "hard-delete"}`;
-      const method = action === "RESTORE" ? "POST" : "DELETE";
+      let url = `/api/documents/${docId}`;
+      if (action === "HARD_DELETE") {
+        url = `/api/documents/${docId}/hard-delete`;
+      }
 
-      const res = await fetch(url, { method });
+      const res = await fetch(url, { method: "DELETE" });
 
       if (!res.ok) throw new Error(`${action} failed`);
 
       setDocuments(documents.filter((d) => d.id !== docId));
       toast.success(
-        action === "RESTORE" ? "กู้คืนเอกสารสำเร็จ" : "ลบเอกสารแบบถาวรสำเร็จ",
+        action === "SOFT_DELETE" ? "ย้ายเอกสารไปที่ถังขยะแล้ว" : "ลบเอกสารแบบถาวรสำเร็จ",
       );
     } catch (error) {
       toast.error("ทำรายการไม่สำเร็จ");
@@ -56,8 +50,8 @@ export default function RecycleBinList({
   if (documents.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-sm border border-slate-200 dark:border-slate-600 p-12 text-center text-slate-500 dark:text-white">
-        <Trash2 size={48} className="mx-auto mb-4 opacity-20" />
-        <p className="text-lg font-medium">ถังขยะว่างเปล่า</p>
+        <FileText size={48} className="mx-auto mb-4 opacity-20" />
+        <p className="text-lg font-medium">ไม่มีเอกสารหมดอายุ</p>
       </div>
     );
   }
@@ -69,9 +63,8 @@ export default function RecycleBinList({
           <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
             <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
             <th className="font-semibold py-4 px-6">ผู้อัปโหลด</th>
-            <th className="font-semibold py-4 px-6">แผนก</th>
-            <th className="font-semibold py-4 px-6">วันที่ลบ</th>
-            <th className="font-semibold py-4 px-6">ขนาดไฟล์</th>
+            <th className="font-semibold py-4 px-6">รหัสเอกสาร</th>
+            <th className="font-semibold py-4 px-6">วันที่หมดอายุ</th>
             <th className="font-semibold py-4 px-6 text-center">จัดการ</th>
           </tr>
         </thead>
@@ -83,7 +76,7 @@ export default function RecycleBinList({
             >
               <td className="py-4 px-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-red-50 dark:bg-red-500/20 text-red-500 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-500/20 text-orange-500 flex items-center justify-center shrink-0">
                     <FileText size={20} />
                   </div>
                   <p className="font-semibold text-slate-800 dark:text-white">
@@ -98,19 +91,14 @@ export default function RecycleBinList({
               </td>
               <td className="py-4 px-6">
                 <div className="text-sm font-medium text-slate-600 dark:text-white">
-                  {doc.department.name}
+                  {doc.documentCode || "-"}
                 </div>
               </td>
               <td className="py-4 px-6">
                 <div className="text-sm text-red-500 font-medium">
-                  {doc.deletedAt
-                    ? format(new Date(doc.deletedAt), "dd/MM/yyyy HH:mm")
+                  {doc.retentionPeriod
+                    ? format(new Date(doc.retentionPeriod), "dd/MM/yyyy")
                     : "-"}
-                </div>
-              </td>
-              <td className="py-4 px-6">
-                <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                  {formatFileSize(doc.fileSize)}
                 </div>
               </td>
               <td className="py-4 px-6">
@@ -120,13 +108,13 @@ export default function RecycleBinList({
                       setConfirmModal({
                         isOpen: true,
                         docId: doc.id,
-                        action: "RESTORE",
+                        action: "SOFT_DELETE",
                       })
                     }
-                    className="p-2 text-blue-500 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition"
-                    title="กู้คืนเอกสาร"
+                    className="p-2 text-orange-500 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/20 rounded-lg transition"
+                    title="ลบไปที่ถังขยะ"
                   >
-                    <RefreshCcw size={18} />
+                    <Trash size={18} />
                   </button>
                   <button
                     onClick={() =>
@@ -151,13 +139,13 @@ export default function RecycleBinList({
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={
-          confirmModal.action === "RESTORE"
-            ? "ยืนยันการกู้คืน"
+          confirmModal.action === "SOFT_DELETE"
+            ? "ยืนยันการลบไปที่ถังขยะ"
             : "ยืนยันการลบถาวร"
         }
         message={
-          confirmModal.action === "RESTORE"
-            ? "เอกสารจะถูกกู้คืนกลับไปยังแผนกเดิม คุณแน่ใจหรือไม่?"
+          confirmModal.action === "SOFT_DELETE"
+            ? "เอกสารจะถูกส่งไปยังถังขยะ คุณแน่ใจหรือไม่?"
             : "การลบนี้จะไม่สามารถกู้คืนได้อีกเลย (ไฟล์ถูกลบออกจาก Server ถาวร) คุณแน่ใจหรือไม่?"
         }
         onConfirm={handleAction}

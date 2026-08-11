@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-import { getUploadDir } from "@/lib/storage";
+import { getUploadDir, uploadFileToStorage } from "@/lib/storage";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: Request) {
@@ -38,8 +38,11 @@ export async function POST(req: Request) {
     const description = formData.get("description") as string;
     const tags = formData.get("tags") as string;
     const documentType = formData.get("documentType") as string;
-    const visibility = (formData.get("visibility") as string) || "DEPARTMENT";
+    const folderId = formData.get("folderId") as string;
     const sharedUsers = formData.get("sharedUsers") as string; // JSON array of user IDs
+    let documentCode = formData.get("documentCode") as string;
+    const retentionPeriodStr = formData.get("retentionPeriod") as string;
+    const scannedFilePath = formData.get("scannedFilePath") as string | null;
 
     if (!file || !title) {
       return NextResponse.json(
@@ -93,21 +96,17 @@ export async function POST(req: Request) {
       "_",
     );
 
-    // Save to UPLOAD_DIR
-    const baseUploadDir = await getUploadDir();
-    const uploadDir = path.join(baseUploadDir, deptFolderName);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
+    // Save to Local and Cloud Storage
+    const { fileUrl, storagePath } = await uploadFileToStorage(
+      buffer,
+      uniqueFilename,
+      deptFolderName,
+      file.type
+    );
 
-    const filePath = path.join(uploadDir, uniqueFilename);
-    fs.writeFileSync(filePath, buffer);
-
-    const fileUrl = `/uploads/${deptFolderName}/${uniqueFilename}`;
-
-    // Parse shared users if private
+    // Parse shared users
     let accessListData: any[] = [];
-    if (visibility === "PRIVATE" && sharedUsers) {
+    if (sharedUsers) {
       try {
         const userIds = JSON.parse(sharedUsers);
         if (Array.isArray(userIds)) {
@@ -118,6 +117,28 @@ export async function POST(req: Request) {
       }
     }
 
+    // Auto-generate Document Code if not provided
+    if (!documentCode) {
+      const year = new Date().getFullYear();
+      const currentYearDocs = await prisma.document.count({
+        where: {
+          departmentId: department.id,
+          createdAt: {
+            gte: new Date(`${year}-01-01T00:00:00.000Z`),
+            lt: new Date(`${year + 1}-01-01T00:00:00.000Z`),
+          }
+        }
+      });
+      const runningNo = String(currentYearDocs + 1).padStart(3, '0');
+      const deptCode = department.name.substring(0, 3).toUpperCase(); // fallback code
+      documentCode = `${deptCode}-${year}-${runningNo}`;
+    }
+
+    let retentionPeriod = null;
+    if (retentionPeriodStr) {
+      retentionPeriod = new Date(retentionPeriodStr);
+    }
+
     // Save to Database
     const newDocument = await prisma.document.create({
       data: {
@@ -126,20 +147,22 @@ export async function POST(req: Request) {
         fileUrl,
         fileType: file.type,
         fileSize: buffer.length,
-        storagePath: baseUploadDir, // Save the physical location
+        storagePath: storagePath, // Save the physical location
         tags: tags || "",
         documentType: documentType || null,
+        documentCode,
+        retentionPeriod,
         currentVersion: 1,
         departmentId: session.user.departmentId,
+        folderId,
         uploaderId: session.user.id,
-        visibility: visibility as any,
         versions: {
           create: {
             version: 1,
             fileUrl,
             fileType: file.type,
             fileSize: buffer.length,
-            storagePath: baseUploadDir, // Save the physical location for this version
+            storagePath: storagePath, // Save the physical location for this version
             uploaderId: session.user.id,
           },
         },
@@ -152,40 +175,61 @@ export async function POST(req: Request) {
       },
     });
 
-    // Track UPLOAD action
+    // Record to AuditLog
     await prisma.auditLog.create({
       data: {
         action: "UPLOAD",
         documentId: newDocument.id,
         userId: session.user.id,
-        details: `Uploaded file: ${uniqueFilename}`,
+        details: `Uploaded document: ${newDocument.title}`,
       },
     });
+    
+    // Cleanup scanned file if applicable
+    if (scannedFilePath) {
+      try {
+        let watchDir = path.join(process.cwd(), "scanned-docs");
+        const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
+        if (setting && setting.value) {
+          watchDir = setting.value;
+        }
 
-    // --- Notifications Logic ---
-    // 1. Notify department members
-    if (visibility === "DEPARTMENT" || visibility === "PUBLIC") {
-      const deptUsers = await prisma.user.findMany({
-        where: {
-          departmentId: session.user.departmentId,
-          notifyOnUpload: true,
-          id: { not: session.user.id },
-        },
-      });
-      if (deptUsers.length > 0) {
-        await prisma.notification.createMany({
-          data: deptUsers.map((u) => ({
-            userId: u.id,
-            title: "เอกสารใหม่ในแผนก",
-            message: `${session.user.name} อัปโหลดเอกสารใหม่: "${title}"`,
-            link: "/documents",
-          })),
-        });
+        const fullPath = path.join(watchDir, scannedFilePath);
+        if (!scannedFilePath.includes("..") && !path.isAbsolute(scannedFilePath) && fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      } catch (err) {
+        console.error("Failed to delete scanned file", err);
       }
     }
 
-    // 2. Notify shared users
-    if (visibility === "PRIVATE" && accessListData.length > 0) {
+    // --- Notifications Logic ---
+    // If not shared explicitly, we assume it's departmental by default (everyone in department can view)
+    // Actually, document is tied to departmentId, so anyone in the department can view it.
+    // Shared users just grant access to people outside the department.
+    
+    // Add Notification logic
+    const departmentUsers = await prisma.user.findMany({
+      where: {
+        departmentId: session.user.departmentId,
+        id: { not: session.user.id },
+        notifyOnUpload: true,
+      },
+    });
+
+    if (departmentUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: departmentUsers.map((u) => ({
+          userId: u.id,
+          title: "เอกสารใหม่ในแผนก",
+          message: `${session.user.name} อัปโหลดเอกสารใหม่: "${title}"`,
+          link: "/documents",
+        })),
+      });
+    }
+
+    // Shared user notifications
+    if (accessListData.length > 0) {
       const sharedUsersToNotify = await prisma.user.findMany({
         where: {
           id: { in: accessListData.map((a) => a.userId) },

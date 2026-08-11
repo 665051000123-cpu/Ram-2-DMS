@@ -12,40 +12,80 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const q = searchParams.get("q");
+    const q = searchParams.get("q") || "";
+    const type = searchParams.get("type");
+    const departmentId = searchParams.get("departmentId");
+    const folderId = searchParams.get("folderId");
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
 
-    if (!q) {
-      return NextResponse.json({ documentIds: [] });
+    let accessibleFolders;
+    if (session.user.role === "SUPER_ADMIN") {
+      accessibleFolders = await prisma.folder.findMany({ select: { id: true } });
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { departmentId: true }
+      });
+      accessibleFolders = await prisma.folder.findMany({
+        where: {
+          OR: [
+            { departmentId: user?.departmentId },
+            { departmentId: null }
+          ]
+        },
+        select: { id: true }
+      });
     }
 
-    // Role-based where clause
+    const folderIds = accessibleFolders.map(f => f.id);
+
+    // Build the query
     let whereClause: any = {
       isDeleted: false,
-      extractedText: {
-        contains: q,
-      },
+      OR: [
+        { folderId: { in: folderIds } },
+        { uploaderId: session.user.id }
+      ]
     };
 
-    if (session.user.role !== "SUPER_ADMIN") {
+    if (q) {
+      // Use AND for text search to not override the access control OR
       whereClause = {
         AND: [
           whereClause,
           {
             OR: [
-              { visibility: "PUBLIC" },
-              {
-                visibility: "DEPARTMENT",
-                departmentId: session.user.departmentId,
-              },
-              { visibility: "PRIVATE", uploaderId: session.user.id },
-              {
-                visibility: "PRIVATE",
-                accessList: { some: { userId: session.user.id } },
-              },
-            ],
-          },
-        ],
+              { title: { contains: q } },
+              { description: { contains: q } },
+              { tags: { contains: q } },
+              { extractedText: { contains: q } }
+            ]
+          }
+        ]
       };
+    }
+
+    if (type && type !== "ALL") {
+      whereClause.documentType = type;
+    }
+
+    if (departmentId && departmentId !== "ALL") {
+      whereClause.departmentId = departmentId;
+    }
+
+    if (folderId && folderId !== "ALL") {
+      whereClause.folderId = folderId;
+    }
+
+    if (dateFrom || dateTo) {
+      whereClause.createdAt = {};
+      if (dateFrom) whereClause.createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        whereClause.createdAt.lte = toDate;
+      }
     }
 
     const documents = await prisma.document.findMany({

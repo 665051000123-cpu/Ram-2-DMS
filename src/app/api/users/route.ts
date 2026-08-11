@@ -12,16 +12,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ดึงเฉพาะพนักงานในแผนกเดียวกัน
+    // ดึงเฉพาะพนักงานในแผนกเดียวกัน (ยกเว้น SUPER_ADMIN)
+    const whereClause = session.user.role === "SUPER_ADMIN" 
+      ? {} 
+      : { departmentId: session.user.departmentId };
+
     const users = await prisma.user.findMany({
-      where: {
-        departmentId: session.user.departmentId,
-      },
+      where: whereClause,
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
+        department: { select: { name: true } },
         createdAt: true,
       },
       orderBy: {

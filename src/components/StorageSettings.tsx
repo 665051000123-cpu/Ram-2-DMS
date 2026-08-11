@@ -5,9 +5,19 @@ import { Save, HardDrive, AlertTriangle } from "lucide-react";
 
 export default function StorageSettings() {
   const [uploadDir, setUploadDir] = useState("");
+  const [scannerDir, setScannerDir] = useState("");
+  const [scannerAppPath, setScannerAppPath] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+
+  // S3 Cloud Backup State
+  const [s3Enabled, setS3Enabled] = useState(false);
+  const [s3Endpoint, setS3Endpoint] = useState("");
+  const [s3Bucket, setS3Bucket] = useState("");
+  const [s3Region, setS3Region] = useState("auto");
+  const [s3AccessKey, setS3AccessKey] = useState("");
+  const [s3SecretKey, setS3SecretKey] = useState("");
 
   useEffect(() => {
     fetchSettings();
@@ -19,6 +29,14 @@ export default function StorageSettings() {
       if (res.ok) {
         const data = await res.json();
         setUploadDir(data.uploadDir || "");
+        setScannerDir(data.scannerDir || "");
+        setScannerAppPath(data.scannerAppPath || "");
+        setS3Enabled(data.s3Enabled === "true");
+        setS3Endpoint(data.s3Endpoint || "");
+        setS3Bucket(data.s3Bucket || "");
+        setS3Region(data.s3Region || "auto");
+        setS3AccessKey(data.s3AccessKey || "");
+        setS3SecretKey(data.s3SecretKey || "");
       }
     } catch (error) {
       console.error("Failed to fetch settings:", error);
@@ -35,7 +53,17 @@ export default function StorageSettings() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uploadDir }),
+        body: JSON.stringify({ 
+          uploadDir,
+          scannerDir,
+          scannerAppPath,
+          s3Enabled: s3Enabled.toString(),
+          s3Endpoint,
+          s3Bucket,
+          s3Region,
+          s3AccessKey,
+          s3SecretKey
+        }),
       });
 
       const data = await res.json();
@@ -120,6 +148,112 @@ export default function StorageSettings() {
               {message.text}
             </p>
           )}
+        </div>
+
+        <hr className="border-slate-200 dark:border-slate-700 my-6" />
+
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">โฟลเดอร์สำหรับรับไฟล์จากเครื่องสแกน (Scanner Watch Directory)</h3>
+          <p className="text-sm text-slate-500 dark:text-white mb-4">
+            กำหนดพาธโฟลเดอร์ที่เครื่องสแกน/ถ่ายเอกสารจะส่งไฟล์เข้ามา (ต้องตรงกับที่ตั้งค่าไว้ในเครื่องสแกน)
+          </p>
+          
+          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
+            Scanner Directory Path
+          </label>
+          <div className="flex gap-3 mb-6">
+            <input
+              type="text"
+              value={scannerDir}
+              onChange={(e) => setScannerDir(e.target.value)}
+              placeholder="C:\scanned-docs หรือ /var/www/scanned-docs"
+              className="flex-1 rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving || !scannerDir.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+          </div>
+
+          <p className="text-sm text-slate-500 dark:text-white mb-4">
+            กำหนดพาธโปรแกรมเครื่องสแกน (.exe) เพื่อให้ระบบหน้าเว็บสามารถสั่งเปิดโปรแกรมได้อัตโนมัติ (ตัวเลือกเสริม)
+          </p>
+          
+          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
+            Scanner App Path (.exe)
+          </label>
+          <div className="flex gap-3 mb-2">
+            <input
+              type="text"
+              value={scannerAppPath}
+              onChange={(e) => setScannerAppPath(e.target.value)}
+              placeholder="C:\Program Files\Pantum\Scan\PantumScan.exe"
+              className="flex-1 rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+          </div>
+        </div>
+
+        <hr className="border-slate-200 dark:border-slate-700 my-6" />
+
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">ระบบสำรองข้อมูลอัตโนมัติ (Cloud Backup)</h3>
+          <p className="text-sm text-slate-500 mb-4">
+            บันทึกไฟล์ขึ้นระบบ Cloud Storage (เช่น AWS S3 หรือ MinIO) โดยอัตโนมัติ เพื่อป้องกันข้อมูลสูญหายจากฮาร์ดแวร์พัง
+          </p>
+          
+          <div className="space-y-4">
+            <label className="flex items-center gap-2 mb-4">
+              <input type="checkbox" checked={s3Enabled} onChange={e => setS3Enabled(e.target.checked)} className="rounded text-blue-600" />
+              <span className="font-medium text-slate-700 dark:text-white">เปิดใช้งานการสำรองข้อมูลขึ้น Cloud</span>
+            </label>
+
+            {s3Enabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Endpoint (เว้นว่างหากใช้ AWS S3 มาตรฐาน)</label>
+                  <input type="text" value={s3Endpoint} onChange={e => setS3Endpoint(e.target.value)} placeholder="https://play.min.io" className="w-full p-2 text-sm border rounded bg-white dark:bg-slate-900 dark:border-slate-600 outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Bucket Name</label>
+                  <input type="text" value={s3Bucket} onChange={e => setS3Bucket(e.target.value)} placeholder="dms-backups" className="w-full p-2 text-sm border rounded bg-white dark:bg-slate-900 dark:border-slate-600 outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Region</label>
+                  <input type="text" value={s3Region} onChange={e => setS3Region(e.target.value)} placeholder="ap-southeast-1" className="w-full p-2 text-sm border rounded bg-white dark:bg-slate-900 dark:border-slate-600 outline-none focus:border-blue-500" />
+                </div>
+                <div></div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Access Key</label>
+                  <input type="text" value={s3AccessKey} onChange={e => setS3AccessKey(e.target.value)} className="w-full p-2 text-sm border rounded bg-white dark:bg-slate-900 dark:border-slate-600 outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Secret Key</label>
+                  <input type="password" value={s3SecretKey} onChange={e => setS3SecretKey(e.target.value)} className="w-full p-2 text-sm border rounded bg-white dark:bg-slate-900 dark:border-slate-600 outline-none focus:border-blue-500" />
+                </div>
+              </div>
+            )}
+            
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "กำลังบันทึก..." : "บันทึกการตั้งค่าระบบจัดเก็บข้อมูล"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

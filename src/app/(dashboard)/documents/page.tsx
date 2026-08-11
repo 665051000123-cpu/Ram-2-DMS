@@ -11,32 +11,46 @@ export default async function DocumentsPage() {
     redirect("/login");
   }
 
-  let whereClause: any = { isDeleted: false };
-  if (session.user.role !== "SUPER_ADMIN") {
-    whereClause = {
-      AND: [
-        { isDeleted: false },
-        {
-          OR: [
-            { visibility: "PUBLIC" },
-            {
-              visibility: "DEPARTMENT",
-              departmentId: session.user.departmentId,
-            },
-            { visibility: "PRIVATE", uploaderId: session.user.id },
-            {
-              visibility: "PRIVATE",
-              accessList: { some: { userId: session.user.id } },
-            },
-          ],
-        },
-      ],
-    };
+  // Fetch folders the user has access to
+  let accessibleFolders;
+  if (session.user.role === "SUPER_ADMIN") {
+    accessibleFolders = await prisma.folder.findMany({
+      orderBy: { name: "asc" }
+    });
+  } else {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { departmentId: true, id: true, role: true }
+    });
+    accessibleFolders = await prisma.folder.findMany({
+      where: {
+        OR: [
+          { departmentId: user?.departmentId },
+          { departmentId: null },
+          ...(user?.departmentId ? [{ accessList: { some: { departmentId: user.departmentId } } }] : []),
+          { accessList: { some: { userId: user?.id } } },
+          { accessList: { some: { role: user?.role } } }
+        ]
+      },
+      orderBy: { name: "asc" }
+    });
   }
+
+  const folderIds = accessibleFolders.map(f => f.id);
+
+  const whereClause: any = {
+    isDeleted: false,
+    OR: [
+      { folderId: { in: folderIds } },
+      { uploaderId: session.user.id } // Always see own docs
+    ]
+  };
+
   const documents = await prisma.document.findMany({
     where: whereClause,
     include: {
       uploader: { select: { name: true } },
+      folder: { select: { name: true, id: true } },
       department: { select: { name: true, id: true } },
       favoritedBy: { where: { userId: session.user.id } },
       versions: { orderBy: { version: "desc" } },
@@ -44,13 +58,9 @@ export default async function DocumentsPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  let departments: { id: string; name: string }[] = [];
-  if (session.user.role === "SUPER_ADMIN") {
-    departments = await prisma.department.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    });
-  }
+  const departments = await prisma.department.findMany({
+    orderBy: { name: "asc" }
+  });
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -59,7 +69,7 @@ export default async function DocumentsPage() {
           คลังเอกสาร
         </h1>
         <p className="text-slate-500 dark:text-white mt-1">
-          เอกสารทั้งหมดในแผนกของคุณ ค้นหาและดาวน์โหลดเอกสารที่ต้องการ
+          เอกสารทั้งหมดในโฟลเดอร์ที่คุณมีสิทธิ์เข้าถึง ค้นหาและดาวน์โหลดเอกสารที่ต้องการ
         </p>
       </div>
 
@@ -67,6 +77,8 @@ export default async function DocumentsPage() {
         initialDocuments={documents as any}
         currentUserId={session.user.id}
         currentUserRole={session.user.role}
+        currentUserDepartmentId={session.user.departmentId}
+        folders={accessibleFolders}
         departments={departments}
       />
     </div>

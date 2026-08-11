@@ -31,6 +31,32 @@ async function getAdminUser() {
   return admin;
 }
 
+async function getDepartmentHead(deptName) {
+  const dept = await prisma.department.findFirst({
+    where: { name: { equals: deptName } }
+  });
+  
+  if (dept) {
+    const head = await prisma.user.findFirst({
+      where: { departmentId: dept.id, role: 'DEPT_HEAD' },
+      include: { department: true }
+    });
+    
+    // If no DEPT_HEAD found, just get any user in that department to be safe, or return dept ID with no specific user if we want
+    if (head) return { user: head, dept: dept };
+    
+    const anyUser = await prisma.user.findFirst({
+      where: { departmentId: dept.id },
+      include: { department: true }
+    });
+    if (anyUser) return { user: anyUser, dept: dept };
+    
+    return { user: null, dept: dept };
+  }
+  
+  return null;
+}
+
 const watcher = chokidar.watch(WATCH_DIR, {
   ignored: /(^|[\/\\])\..|processed/, // ignore hidden files and processed folder
   persistent: true,
@@ -42,12 +68,36 @@ const watcher = chokidar.watch(WATCH_DIR, {
 });
 
 watcher.on('add', async (filePath) => {
+  const relativePath = path.relative(WATCH_DIR, filePath);
+  const subFolderName = path.dirname(relativePath);
+  
   const fileName = path.basename(filePath);
-  console.log(`[${new Date().toLocaleTimeString()}] New file detected: ${fileName}`);
+  const isSubFolder = subFolderName && subFolderName !== '.' && subFolderName !== 'processed';
+  
+  console.log(`[${new Date().toLocaleTimeString()}] New file detected: ${fileName} ${isSubFolder ? `in [${subFolderName}]` : ''}`);
   
   try {
-    // 1. Get Admin User
     const admin = await getAdminUser();
+    let targetUser = admin;
+    let targetDept = admin.department;
+    let targetVisibility = 'PRIVATE';
+    
+    if (isSubFolder) {
+      const deptData = await getDepartmentHead(subFolderName);
+      if (deptData) {
+        targetDept = deptData.dept;
+        if (deptData.user) {
+          targetUser = deptData.user;
+          targetVisibility = 'DEPARTMENT';
+          console.log(`   -> Routing to department: ${targetDept.name} (Assigned to: ${targetUser.name})`);
+        } else {
+          targetVisibility = 'DEPARTMENT';
+          console.log(`   -> Routing to department: ${targetDept.name} (Assigned to: SUPER_ADMIN)`);
+        }
+      } else {
+        console.log(`   -> Department [${subFolderName}] not found, routing to SUPER_ADMIN.`);
+      }
+    }
     
     // 2. Prepare Upload Destination
     let baseUploadDir = path.join(__dirname, 'public', 'uploads');
@@ -62,7 +112,7 @@ watcher.on('add', async (filePath) => {
 
     const fileExtension = fileName.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
-    const deptFolderName = admin.department.name.replace(/[^a-zA-Z0-9-_\u0E00-\u0E7F]/g, '_');
+    const deptFolderName = targetDept ? targetDept.name.replace(/[^a-zA-Z0-9-_\u0E00-\u0E7F]/g, '_') : 'general';
     
     const uploadDir = path.join(baseUploadDir, deptFolderName);
     if (!fs.existsSync(uploadDir)) {
@@ -93,15 +143,15 @@ watcher.on('add', async (filePath) => {
         tags: 'Scanned',
         documentType: 'อื่นๆ',
         currentVersion: 1,
-        departmentId: admin.departmentId,
-        uploaderId: admin.id,
-        visibility: 'PRIVATE', // Admin only initially
+        departmentId: targetDept ? targetDept.id : admin.departmentId,
+        uploaderId: targetUser.id,
+        visibility: targetVisibility,
         versions: {
           create: {
             version: 1,
             fileUrl: fileUrl,
             fileType: fileType,
-            uploaderId: admin.id,
+            uploaderId: targetUser.id,
           }
         }
       },
@@ -112,7 +162,7 @@ watcher.on('add', async (filePath) => {
       data: {
         action: 'UPLOAD',
         documentId: newDocument.id,
-        userId: admin.id,
+        userId: targetUser.id,
         details: `Auto-uploaded scanned file: ${fileName}`
       }
     });
@@ -121,7 +171,7 @@ watcher.on('add', async (filePath) => {
     const processedPath = path.join(PROCESSED_DIR, `${Date.now()}_${fileName}`);
     fs.renameSync(filePath, processedPath);
 
-    console.log(`[Success] Document saved as "${titleWithoutExt}" and assigned to ${admin.name} (PRIVATE).`);
+    console.log(`[Success] Document saved as "${titleWithoutExt}" and assigned to ${targetUser.name} (${targetVisibility}).`);
     
     // 7. Check if Auto OCR is enabled and trigger it
     try {

@@ -6,9 +6,11 @@
     "dev": "next dev -H 0.0.0.0 -p 5175",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 5175",
-    "lint": "eslint"
+    "lint": "eslint",
+    "watcher": "node scanner-watcher.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1107.0",
     "@libsql/client": "^0.17.4",
     "@prisma/adapter-libsql": "^7.9.1",
     "@prisma/client": "^6.19.3",

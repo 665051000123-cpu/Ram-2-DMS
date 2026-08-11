@@ -93,7 +93,8 @@ export async function PUT(
     const description = formData.get("description") as string;
     const tags = formData.get("tags") as string;
     const documentType = formData.get("documentType") as string;
-    const visibility = formData.get("visibility") as string;
+    const documentCode = formData.get("documentCode") as string;
+    const retentionPeriodStr = formData.get("retentionPeriod") as string;
     const file = formData.get("file") as File | null;
 
     const document = await prisma.document.findUnique({
@@ -167,8 +168,13 @@ export async function PUT(
         documentType !== null ? documentType : document.documentType,
     };
 
-    if (visibility) {
-      updateData.visibility = visibility;
+    if (documentCode) {
+      updateData.documentCode = documentCode;
+    }
+    if (retentionPeriodStr) {
+      updateData.retentionPeriod = new Date(retentionPeriodStr);
+    } else if (retentionPeriodStr === "") {
+      updateData.retentionPeriod = null; // Allow clearing it
     }
 
     if (hasNewFile) {

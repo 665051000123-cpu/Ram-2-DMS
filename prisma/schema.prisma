@@ -19,20 +19,16 @@ enum Role {
   STAFF
 }
 
-enum DocumentVisibility {
-  DEPARTMENT
-  PRIVATE
-  PUBLIC
-}
-
 model Department {
-  id        String     @id @default(uuid())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  
-  users     User[]
-  documents Document[]
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  documents    Document[]
+  folders      Folder[]
+  folderAccess FolderAccess[]
 }
 
 model User {
@@ -50,68 +46,74 @@ model User {
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  uploadedDocs        Document[]
-  uploadedVersions    DocumentVersion[]
-  auditLogs           AuditLog[]
-  favorites           Favorite[]
-  notifications       Notification[]
-  documentAccess      DocumentAccess[]
+  uploadedDocs     Document[]
+  uploadedVersions DocumentVersion[]
+  auditLogs        AuditLog[]
+  favorites        Favorite[]
+  notifications    Notification[]
+  documentAccess   DocumentAccess[]
+  folderAccess     FolderAccess[]
 }
 
 model Document {
-  id           String     @id @default(uuid())
-  title        String
-  description  String?
-  fileUrl      String     // URL หรือที่เก็บไฟล์ในระบบ
-  fileType     String     // เช่น 'application/pdf', 'image/jpeg'
-  fileSize     Int        @default(0) // ขนาดไฟล์เป็น byte
-  storagePath  String?    // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลด (เช่น D:\DMS_Uploads)
-  extractedText String?   @db.LongText // ข้อความที่สกัดจากไฟล์ (OCR/PDF Parsing)
-  tags         String     // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
-  documentType String?    // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
-  currentVersion Int      @default(1)
-  
-  visibility   DocumentVisibility @default(DEPARTMENT)
-  
+  id             String  @id @default(uuid())
+  title          String
+  description    String?
+  fileUrl        String // URL หรือที่เก็บไฟล์ในระบบ
+  fileType       String // เช่น 'application/pdf', 'image/jpeg'
+  fileSize       Int     @default(0) // ขนาดไฟล์เป็น byte
+  storagePath    String? // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลด (เช่น D:\DMS_Uploads)
+  extractedText  String? @db.LongText // ข้อความที่สกัดจากไฟล์ (OCR/PDF Parsing)
+  tags           String // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
+  documentType   String? // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
+  currentVersion Int     @default(1)
+
+  documentCode    String?   @unique
+  retentionPeriod DateTime?
+  isExpired       Boolean   @default(false)
+
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id])
-  
-  uploaderId   String
-  uploader     User       @relation(fields: [uploaderId], references: [id])
-  
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  isDeleted    Boolean    @default(false)
-  deletedAt    DateTime?
 
-  auditLogs    AuditLog[]
-  versions     DocumentVersion[]
-  favoritedBy  Favorite[]
-  accessList   DocumentAccess[]
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id])
+
+  uploaderId String
+  uploader   User   @relation(fields: [uploaderId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  auditLogs   AuditLog[]
+  versions    DocumentVersion[]
+  favoritedBy Favorite[]
+  accessList  DocumentAccess[]
 }
 
 model DocumentVersion {
-  id           String     @id @default(uuid())
-  documentId   String
-  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  version      Int
-  fileUrl      String
-  fileType     String
-  fileSize     Int        @default(0)
-  storagePath  String?    // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลดของเวอร์ชันนี้
-  extractedText String?   @db.LongText
-  uploaderId   String
-  uploader     User       @relation(fields: [uploaderId], references: [id])
-  createdAt    DateTime   @default(now())
+  id            String   @id @default(uuid())
+  documentId    String
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version       Int
+  fileUrl       String
+  fileType      String
+  fileSize      Int      @default(0)
+  storagePath   String? // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลดของเวอร์ชันนี้
+  extractedText String?  @db.LongText
+  uploaderId    String
+  uploader      User     @relation(fields: [uploaderId], references: [id])
+  createdAt     DateTime @default(now())
 }
 
 model Favorite {
-  id           String     @id @default(uuid())
-  userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documentId   String
-  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
 
   @@unique([userId, documentId])
 }
@@ -131,7 +133,7 @@ model AuditLog {
   document   Document?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
   userId     String?
   user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  details    String?    // ข้อมูลเพิ่มเติม เช่น comment
+  details    String? // ข้อมูลเพิ่มเติม เช่น comment
   createdAt  DateTime   @default(now())
 }
 
@@ -163,4 +165,38 @@ model SystemSetting {
   key       String   @unique
   value     String   @db.Text
   updatedAt DateTime @updatedAt
+}
+
+model Folder {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  parentId   String?
+  parent     Folder?  @relation("FolderToSubFolder", fields: [parentId], references: [id])
+  subFolders Folder[] @relation("FolderToSubFolder")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents  Document[]
+  accessList FolderAccess[]
+}
+
+model FolderAccess {
+  id       String @id @default(uuid())
+  folderId String
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role Role?
+
+  createdAt DateTime @default(now())
 }

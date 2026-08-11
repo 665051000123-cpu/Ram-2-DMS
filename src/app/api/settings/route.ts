@@ -20,12 +20,26 @@ export async function GET() {
       return acc;
     }, {});
 
-    // Ensure UPLOAD_DIR has a fallback if not set
     if (!settingsMap["UPLOAD_DIR"]) {
       settingsMap["UPLOAD_DIR"] = process.env.UPLOAD_DIR || path.join(process.cwd(), "public", "uploads");
     }
+    
+    if (!settingsMap["SCANNER_DIR"]) {
+      settingsMap["SCANNER_DIR"] = path.join(process.cwd(), "scanned-docs");
+    }
 
-    return NextResponse.json(settingsMap);
+    return NextResponse.json({
+      ...settingsMap,
+      uploadDir: settingsMap["UPLOAD_DIR"],
+      scannerDir: settingsMap["SCANNER_DIR"],
+      scannerAppPath: settingsMap["SCANNER_APP_PATH"],
+      s3Enabled: settingsMap["S3_ENABLED"],
+      s3Endpoint: settingsMap["S3_ENDPOINT"],
+      s3Bucket: settingsMap["S3_BUCKET"],
+      s3Region: settingsMap["S3_REGION"],
+      s3AccessKey: settingsMap["S3_ACCESS_KEY"],
+      s3SecretKey: settingsMap["S3_SECRET_KEY"]
+    });
   } catch (error: any) {
     console.error("Error fetching settings:", error);
     return NextResponse.json(
@@ -66,6 +80,38 @@ export async function POST(request: Request) {
         update: { value: uploadDir },
         create: { key: "UPLOAD_DIR", value: uploadDir },
       });
+    }
+
+    if (body.scannerDir !== undefined) {
+      const scannerDir = body.scannerDir;
+      if (typeof scannerDir === "string" && scannerDir.trim() !== "") {
+        try {
+          if (!fs.existsSync(scannerDir)) {
+            fs.mkdirSync(scannerDir, { recursive: true });
+          }
+          await prisma.systemSetting.upsert({
+            where: { key: "SCANNER_DIR" },
+            update: { value: scannerDir },
+            create: { key: "SCANNER_DIR", value: scannerDir },
+          });
+        } catch (e: any) {
+          return NextResponse.json(
+            { error: `Cannot access or create scanner directory: ${e.message}` },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
+    if (body.scannerAppPath !== undefined) {
+      const scannerAppPath = body.scannerAppPath;
+      if (typeof scannerAppPath === "string") {
+        await prisma.systemSetting.upsert({
+          where: { key: "SCANNER_APP_PATH" },
+          update: { value: scannerAppPath },
+          create: { key: "SCANNER_APP_PATH", value: scannerAppPath },
+        });
+      }
     }
 
     // Handle generic feature toggles or other settings

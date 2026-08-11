@@ -38,15 +38,12 @@ export async function GET(
 
     // Check permissions
     if (session.user.role !== "SUPER_ADMIN") {
-      if (document.visibility === "PRIVATE") {
-        const hasAccess =
-          document.uploaderId === session.user.id ||
-          document.accessList.some((a: any) => a.userId === session.user.id);
-        if (!hasAccess)
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      } else if (document.visibility === "DEPARTMENT") {
-        if (document.departmentId !== session.user.departmentId)
-          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const isUploader = document.uploaderId === session.user.id;
+      const isSameDepartment = document.departmentId === session.user.departmentId;
+      const hasSharedAccess = document.accessList.some((a: any) => a.userId === session.user.id);
+      
+      if (!isUploader && !isSameDepartment && !hasSharedAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
 
@@ -140,9 +137,9 @@ export async function GET(
     const watermarkSetting = await prisma.systemSetting.findUnique({ where: { key: "ENABLE_PDF_WATERMARK" } });
     const isWatermarkEnabled = watermarkSetting?.value === "true";
     const isPdf = document.fileType === "application/pdf" || ext === ".pdf";
-    const isPrivate = document.visibility === "PRIVATE";
+    const isSharedExternally = document.accessList.length > 0; // Simple logic to watermark if shared outside
 
-    if (isWatermarkEnabled && isPdf && isPrivate) {
+    if (isWatermarkEnabled && isPdf && isSharedExternally) {
       try {
         const fileBuffer = fs.readFileSync(filePath);
         const pdfDoc = await PDFDocument.load(fileBuffer);
@@ -166,7 +163,9 @@ export async function GET(
         const modifiedPdfBytes = await pdfDoc.save();
         headers.set("Content-Type", "application/pdf");
         headers.set("Content-Length", modifiedPdfBytes.length.toString());
-        return new NextResponse(modifiedPdfBytes, { headers });
+        // Fix: Convert Uint8Array to Buffer for NextResponse
+        const buffer = Buffer.from(modifiedPdfBytes);
+        return new NextResponse(buffer, { headers });
       } catch (err) {
         console.error("Failed to watermark PDF:", err);
         // Fallback to normal stream if watermark fails

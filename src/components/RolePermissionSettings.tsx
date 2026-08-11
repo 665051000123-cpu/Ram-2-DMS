@@ -62,6 +62,7 @@ export default function RolePermissionSettings() {
   }
 
   const permissionItems = [
+    { key: "menu_folders" as const, label: "สิทธิ์จัดการแฟ้มเอกสาร (สร้าง/ลบแฟ้ม)" },
     { key: "menu_trash" as const, label: "มองเห็นเมนูถังขยะ" },
     { key: "menu_audit" as const, label: "มองเห็นเมนูประวัติการใช้งาน" },
     { key: "menu_users" as const, label: "มองเห็นเมนูจัดการผู้ใช้งาน" },

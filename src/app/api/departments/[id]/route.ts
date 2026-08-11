@@ -3,6 +3,54 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user || session.user.role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    const resolvedParams = await params;
+    const deptId = resolvedParams.id;
+    const { name } = await req.json();
+
+    if (!name || !name.trim()) {
+      return NextResponse.json(
+        { error: "Department name is required" },
+        { status: 400 },
+      );
+    }
+
+    const existingDept = await prisma.department.findUnique({
+      where: { name: name.trim() },
+    });
+
+    if (existingDept && existingDept.id !== deptId) {
+      return NextResponse.json(
+        { error: "มีแผนกนี้ในระบบแล้ว" },
+        { status: 400 },
+      );
+    }
+
+    const updatedDept = await prisma.department.update({
+      where: { id: deptId },
+      data: { name: name.trim() },
+    });
+
+    return NextResponse.json({ department: updatedDept });
+  } catch (error) {
+    console.error("Update Department Error:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

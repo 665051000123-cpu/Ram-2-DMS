@@ -40,6 +40,7 @@ export default function Sidebar({
   if (permissions && !permissionsLoading) {
     if (permissions.menu_trash) {
       menuItems.push({ icon: Trash2, label: "ถังขยะ", href: "/recycle-bin" });
+      menuItems.push({ icon: FileText, label: "เอกสารรอทำลาย", href: "/expired-documents" });
     }
     if (permissions.menu_audit) {
       menuItems.push({

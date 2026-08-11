@@ -2,6 +2,7 @@ export interface RolePermissions {
   menu_trash: boolean;
   menu_audit: boolean;
   menu_users: boolean;
+  menu_folders: boolean;
   doc_edit: boolean;
   doc_delete: boolean;
 }
@@ -16,6 +17,7 @@ export const DEFAULT_PERMISSIONS: AllPermissions = {
     menu_trash: true,
     menu_audit: true,
     menu_users: true,
+    menu_folders: true,
     doc_edit: true,
     doc_delete: true,
   },
@@ -23,6 +25,7 @@ export const DEFAULT_PERMISSIONS: AllPermissions = {
     menu_trash: false,
     menu_audit: false,
     menu_users: false,
+    menu_folders: false,
     doc_edit: false,
     doc_delete: false,
   },
@@ -32,6 +35,7 @@ export const SUPER_ADMIN_PERMISSIONS: RolePermissions = {
   menu_trash: true,
   menu_audit: true,
   menu_users: true,
+  menu_folders: true,
   doc_edit: true,
   doc_delete: true,
 };

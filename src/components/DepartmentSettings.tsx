@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Building2, Plus, Trash2, Users, FileText, Search } from "lucide-react";
+import { Building2, Plus, Trash2, Users, FileText, Search, Edit2, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -29,6 +29,9 @@ export default function DepartmentSettings({
   const [newDeptName, setNewDeptName] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -104,6 +107,45 @@ export default function DepartmentSettings({
 
       setDepartments(departments.filter((d) => d.id !== deptId));
       toast.success("ลบแผนกสำเร็จ");
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleEditClick = (dept: Department) => {
+    setEditingId(dept.id);
+    setEditName(dept.name);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const handleSaveEdit = async (deptId: string) => {
+    if (!editName.trim()) {
+      toast.error("ชื่อแผนกไม่สามารถเว้นว่างได้");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/departments/${deptId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editName.trim() }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update department");
+      }
+
+      setDepartments(
+        departments.map((d) => (d.id === deptId ? { ...d, name: editName.trim() } : d))
+      );
+      setEditingId(null);
+      toast.success("แก้ไขชื่อแผนกสำเร็จ");
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);
@@ -199,7 +241,21 @@ export default function DepartmentSettings({
                   className="hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
                 >
                   <td className="py-4 px-6 font-medium text-slate-800 dark:text-white">
-                    {dept.name}
+                    {editingId === dept.id ? (
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveEdit(dept.id);
+                          if (e.key === "Escape") handleCancelEdit();
+                        }}
+                        className="w-full p-2 border border-blue-500 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/50 bg-white dark:bg-slate-800 text-sm"
+                      />
+                    ) : (
+                      dept.name
+                    )}
                   </td>
                   <td className="py-4 px-6 text-center">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white rounded-full text-sm font-medium">
@@ -217,21 +273,49 @@ export default function DepartmentSettings({
                     {format(new Date(dept.createdAt), "dd MMM yyyy")}
                   </td>
                   <td className="py-4 px-6">
-                    <div className="flex items-center justify-center">
-                      <button
-                        onClick={() => handleDeleteClick(dept.id, dept.name)}
-                        disabled={
-                          dept._count.users > 0 || dept._count.documents > 0
-                        }
-                        className="p-2 text-red-500 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-lg transition disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                        title={
-                          dept._count.users > 0 || dept._count.documents > 0
-                            ? "ไม่สามารถลบแผนกที่มีข้อมูลอยู่ได้"
-                            : "ลบแผนก"
-                        }
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                    <div className="flex items-center justify-center gap-2">
+                      {editingId === dept.id ? (
+                        <>
+                          <button
+                            onClick={() => handleSaveEdit(dept.id)}
+                            className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-500/20 rounded-lg transition"
+                            title="บันทึก"
+                          >
+                            <Check size={18} />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                            title="ยกเลิก"
+                          >
+                            <X size={18} />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEditClick(dept)}
+                            className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition"
+                            title="แก้ไขชื่อแผนก"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(dept.id, dept.name)}
+                            disabled={
+                              dept._count.users > 0 || dept._count.documents > 0
+                            }
+                            className="p-2 text-red-500 dark:text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-lg transition disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            title={
+                              dept._count.users > 0 || dept._count.documents > 0
+                                ? "ไม่สามารถลบแผนกที่มีข้อมูลอยู่ได้"
+                                : "ลบแผนก"
+                            }
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

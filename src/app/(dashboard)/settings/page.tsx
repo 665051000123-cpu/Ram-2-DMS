@@ -6,6 +6,7 @@ import DepartmentSettings from "@/components/DepartmentSettings";
 import StorageSettings from "@/components/StorageSettings";
 import FeatureSettings from "@/components/FeatureSettings";
 import RolePermissionSettings from "@/components/RolePermissionSettings";
+import FolderSettings from "@/components/FolderSettings";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -38,6 +39,15 @@ export default async function SettingsPage() {
     },
   });
 
+  const folders = await prisma.folder.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      department: true,
+      parent: true,
+      _count: { select: { documents: { where: { isDeleted: false } } } }
+    }
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
       <div>
@@ -50,6 +60,7 @@ export default async function SettingsPage() {
       </div>
 
       <FeatureSettings />
+      <FolderSettings initialFolders={folders} departments={departments} />
       <RolePermissionSettings />
       <StorageSettings />
       <DepartmentSettings initialDepartments={departments} />
