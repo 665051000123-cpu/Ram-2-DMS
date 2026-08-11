@@ -22,11 +22,12 @@ export async function GET(
 
     const url = new URL(req.url);
     const isView = url.searchParams.get("view") === "true";
+    const versionId = url.searchParams.get("versionId");
 
     // Find the document
     const document = await prisma.document.findUnique({
       where: { id: docId, isDeleted: false },
-      include: { accessList: true },
+      include: { accessList: true, versions: true },
     });
 
     if (!document) {
@@ -57,17 +58,31 @@ export async function GET(
       },
     });
 
+    // Resolve target file URLs
+    let targetFileUrl = document.fileUrl;
+    let targetStoragePath = document.storagePath;
+
+    if (versionId) {
+      const version = document.versions.find(v => v.id === versionId);
+      if (version) {
+        targetFileUrl = version.fileUrl;
+        targetStoragePath = version.storagePath;
+      } else {
+        return NextResponse.json({ error: "Version not found" }, { status: 404 });
+      }
+    }
+
     // Serve the file directly instead of redirecting
     // fileUrl is like /uploads/แผนก/uuid.pdf
-    const urlParts = document.fileUrl.split('/').filter(Boolean);
+    const urlParts = targetFileUrl.split('/').filter(Boolean);
     // urlParts: ['uploads', 'แผนก', 'uuid.pdf']
     const relativePath = urlParts.slice(1).map(p => decodeURIComponent(p));
     
     let filePath = "";
     
     // Try 1: Database storagePath
-    if (document.storagePath) {
-      filePath = path.join(document.storagePath, ...relativePath);
+    if (targetStoragePath) {
+      filePath = path.join(targetStoragePath, ...relativePath);
     }
     
     // Try 2: Current System Upload Dir

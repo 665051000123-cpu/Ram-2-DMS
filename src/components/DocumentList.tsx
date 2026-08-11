@@ -52,6 +52,7 @@ type Document = {
   fileSize?: number;
   favoritedBy?: { userId: string }[];
   versions?: {
+    id: string;
     version: number;
     fileUrl: string;
     fileType: string;
@@ -1337,12 +1338,26 @@ export default function DocumentList({
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      {v.fileType === "application/pdf" && (
+                        <button
+                          onClick={() =>
+                            setViewModal({
+                              isOpen: true,
+                              url: `/api/documents/${historyModal.doc?.id}/download?view=true&versionId=${v.id}`,
+                              title: `${historyModal.doc?.title} (เวอร์ชัน ${v.version}.0)` || "",
+                            })
+                          }
+                          className="px-4 py-2 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-white text-sm font-medium rounded-lg transition flex items-center gap-2"
+                        >
+                          <Eye size={16} /> ดู
+                        </button>
+                      )}
                       <a
-                        href={v.fileUrl}
+                        href={`/api/documents/${historyModal.doc?.id}/download?versionId=${v.id}`}
                         download
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 text-slate-700 dark:text-white text-sm font-medium rounded-lg transition flex items-center gap-2"
+                        className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg transition flex items-center gap-2"
                       >
                         <Download size={16} /> โหลดไฟล์เก่า
                       </a>

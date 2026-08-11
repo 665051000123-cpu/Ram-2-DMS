@@ -20,10 +20,23 @@ export async function GET(req: Request) {
        return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const url = new URL(req.url);
+    const myDeptOnly = url.searchParams.get("myDeptOnly") === "true";
+
     let folders;
     
     if (session.user.role === "SUPER_ADMIN") {
       folders = await prisma.folder.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          department: true,
+          parent: { select: { id: true, name: true } },
+          _count: { select: { documents: { where: { isDeleted: false } } } }
+        }
+      });
+    } else if (myDeptOnly && user.departmentId) {
+      folders = await prisma.folder.findMany({
+        where: { departmentId: user.departmentId },
         orderBy: { createdAt: "desc" },
         include: {
           department: true,
