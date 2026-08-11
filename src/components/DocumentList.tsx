@@ -22,12 +22,15 @@ import {
   ChevronRight,
   Building2,
   Shield,
+  Link,
+  Unlink,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
 import FolderAccessModal from "./FolderAccessModal";
+import DocumentLinkModal from "./DocumentLinkModal";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type Document = {
@@ -170,6 +173,14 @@ export default function DocumentList({
   });
 
   const [historyModal, setHistoryModal] = useState<{
+    isOpen: boolean;
+    doc: Document | null;
+  }>({
+    isOpen: false,
+    doc: null,
+  });
+
+  const [linkModal, setLinkModal] = useState<{
     isOpen: boolean;
     doc: Document | null;
   }>({
@@ -966,13 +977,22 @@ export default function DocumentList({
                                       {(doc.uploader.name === currentUserId ||
                                         currentUserRole === "SUPER_ADMIN" ||
                                         permissions?.doc_edit) && (
-                                        <button
-                                          onClick={() => handleEditClick(doc)}
-                                          className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                                          title="แก้ไขข้อมูลเอกสาร"
-                                        >
-                                          <Edit size={18} />
-                                        </button>
+                                        <>
+                                          <button
+                                            onClick={() => setLinkModal({ isOpen: true, doc })}
+                                            className="p-2 text-slate-500 dark:text-white hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                            title="เชื่อมโยงเอกสาร (Link)"
+                                          >
+                                            <Link size={18} />
+                                          </button>
+                                          <button
+                                            onClick={() => handleEditClick(doc)}
+                                            className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                                            title="แก้ไขข้อมูลเอกสาร"
+                                          >
+                                            <Edit size={18} />
+                                          </button>
+                                        </>
                                       )}
                                       
                                       {(doc.uploader.name === currentUserId ||
@@ -1248,11 +1268,32 @@ export default function DocumentList({
                           historyModal.doc.updatedAt ||
                             historyModal.doc.createdAt,
                         ),
-                        "dd/MM/yyyy HH:mm",
-                      )}
+                        "dd MMM yyyy HH:mm",
+                      )}{" "}
+                      โดย {historyModal.doc.uploader.name}
                     </p>
+                    <div className="mt-2 text-xs text-slate-500 dark:text-white flex items-center gap-2">
+                      <span className="font-semibold text-emerald-700">
+                        ขนาดไฟล์:
+                      </span>
+                      {formatFileSize(historyModal.doc.fileSize)}
+                    </div>
                   </div>
                   <div className="flex gap-2">
+                    {historyModal.doc.fileType === "application/pdf" && (
+                      <button
+                        onClick={() =>
+                          setViewModal({
+                            isOpen: true,
+                            url: `/api/documents/${historyModal.doc?.id}/download?view=true`,
+                            title: historyModal.doc?.title || "",
+                          })
+                        }
+                        className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-900 transition-colors text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 dark:bg-emerald-500/20 transition-colors flex items-center gap-1"
+                      >
+                        <Eye size={14} /> ดู
+                      </button>
+                    )}
                     <a
                       href={`/api/documents/${historyModal.doc.id}/download`}
                       download
@@ -1350,6 +1391,15 @@ export default function DocumentList({
         folderId={manageAccessModal.folderId}
         folderName={manageAccessModal.folderName}
       />
+
+      {linkModal.isOpen && linkModal.doc && (
+        <DocumentLinkModal 
+           isOpen={linkModal.isOpen}
+           docId={linkModal.doc.id}
+           docTitle={linkModal.doc.title}
+           onClose={() => setLinkModal({ isOpen: false, doc: null })}
+        />
+      )}
     </div>
   );
 }

@@ -90,6 +90,20 @@ model Document {
   versions    DocumentVersion[]
   favoritedBy Favorite[]
   accessList  DocumentAccess[]
+
+  linkedFrom DocumentLink[] @relation("LinkedFrom")
+  linkedTo   DocumentLink[] @relation("LinkedTo")
+}
+
+model DocumentLink {
+  id         String   @id @default(uuid())
+  sourceId   String
+  source     Document @relation("LinkedFrom", fields: [sourceId], references: [id], onDelete: Cascade)
+  targetId   String
+  target     Document @relation("LinkedTo", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([sourceId, targetId])
 }
 
 model DocumentVersion {

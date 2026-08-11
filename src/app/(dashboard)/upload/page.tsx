@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { UploadCloud, FileText, X, AlertCircle, Camera, Calendar, ChevronDown, Inbox, RefreshCw, FileImage, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -147,6 +147,36 @@ export default function UploadPage() {
       if (interval) clearInterval(interval);
     };
   }, [showScannerModal, scannerListeningTime]);
+
+  const getFolderDisplayName = (folder: any, allFolders: any[]) => {
+    let path = folder.name;
+    let currentParentId = folder.parentId;
+    let depth = 0;
+    while(currentParentId && depth < 10) {
+       const parent = allFolders.find((f: any) => f.id === currentParentId);
+       if (parent) {
+          path = parent.name + " / " + path;
+          currentParentId = parent.parentId;
+       } else {
+          if (folder.parent?.name && path === folder.name) {
+             path = folder.parent.name + " / " + path;
+          }
+          break;
+       }
+       depth++;
+    }
+    const deptSuffix = folder.department ? ` (ส่วนกลาง: ${folder.department.name})` : '';
+    return path + deptSuffix;
+  };
+
+  const sortedFolders = useMemo(() => {
+    if (!folders) return [];
+    const mapped = folders.map(f => ({
+      ...f,
+      displayName: getFolderDisplayName(f, folders)
+    }));
+    return mapped.sort((a, b) => a.displayName.localeCompare(b.displayName, 'th'));
+  }, [folders]);
 
   // Load saved tags and preferences on mount
   useEffect(() => {
@@ -774,9 +804,9 @@ export default function UploadPage() {
                   required
                 >
                   <option value="" disabled>-- เลือกแฟ้ม --</option>
-                  {folders?.map((f: any) => (
+                  {sortedFolders.map((f: any) => (
                     <option key={f.id} value={f.id}>
-                      {f.name} {f.department ? `(แฟ้มส่วนกลาง: ${f.department.name})` : ''}
+                      {f.displayName}
                     </option>
                   ))}
                 </select>
