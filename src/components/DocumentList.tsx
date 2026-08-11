@@ -24,6 +24,7 @@ import {
   Shield,
   Link,
   Unlink,
+  MessageSquare,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,6 +32,7 @@ import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
 import FolderAccessModal from "./FolderAccessModal";
 import DocumentLinkModal from "./DocumentLinkModal";
+import DocumentCommentModal from "./DocumentCommentModal";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type Document = {
@@ -181,6 +183,14 @@ export default function DocumentList({
   });
 
   const [linkModal, setLinkModal] = useState<{
+    isOpen: boolean;
+    doc: Document | null;
+  }>({
+    isOpen: false,
+    doc: null,
+  });
+
+  const [commentModal, setCommentModal] = useState<{
     isOpen: boolean;
     doc: Document | null;
   }>({
@@ -979,6 +989,13 @@ export default function DocumentList({
                                         permissions?.doc_edit) && (
                                         <>
                                           <button
+                                            onClick={() => setCommentModal({ isOpen: true, doc })}
+                                            className="p-2 text-slate-500 dark:text-white hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                            title="ความคิดเห็นและข้อเสนอแนะ"
+                                          >
+                                            <MessageSquare size={18} />
+                                          </button>
+                                          <button
                                             onClick={() => setLinkModal({ isOpen: true, doc })}
                                             className="p-2 text-slate-500 dark:text-white hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                                             title="เชื่อมโยงเอกสาร (Link)"
@@ -1398,6 +1415,17 @@ export default function DocumentList({
            docId={linkModal.doc.id}
            docTitle={linkModal.doc.title}
            onClose={() => setLinkModal({ isOpen: false, doc: null })}
+        />
+      )}
+
+      {commentModal.isOpen && commentModal.doc && (
+        <DocumentCommentModal 
+           isOpen={commentModal.isOpen}
+           docId={commentModal.doc.id}
+           docTitle={commentModal.doc.title}
+           currentUserId={currentUserId}
+           currentUserRole={currentUserRole}
+           onClose={() => setCommentModal({ isOpen: false, doc: null })}
         />
       )}
     </div>

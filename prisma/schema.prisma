@@ -53,6 +53,7 @@ model User {
   notifications    Notification[]
   documentAccess   DocumentAccess[]
   folderAccess     FolderAccess[]
+  comments         Comment[]
 }
 
 model Document {
@@ -93,6 +94,7 @@ model Document {
 
   linkedFrom DocumentLink[] @relation("LinkedFrom")
   linkedTo   DocumentLink[] @relation("LinkedTo")
+  comments   Comment[]
 }
 
 model DocumentLink {
@@ -213,4 +215,15 @@ model FolderAccess {
   role Role?
 
   createdAt DateTime @default(now())
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  text       String   @db.Text
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
