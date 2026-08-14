@@ -114,6 +114,8 @@ export default function DocumentList({
   const [filterDepartmentId, setFilterDepartmentId] = useState("ALL");
   const [filterUploaderName, setFilterUploaderName] = useState("ALL");
   const [filterCustomFields, setFilterCustomFields] = useState<Record<string, string>>({});
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [sortBy, setSortBy] = useState("DATE_DESC");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
   const [filterType, setFilterType] = useState("ALL");
@@ -206,7 +208,7 @@ export default function DocumentList({
 
 
   const filteredDocs = useMemo(() => {
-    return documents.filter((doc) => {
+    let filtered = documents.filter((doc) => {
       // 1. Text Search (Local or Deep Search)
       let matchesSearch = true;
       if (deepSearchDocs !== null) {
@@ -266,14 +268,44 @@ export default function DocumentList({
         }
       }
 
+      // 7. Status Filter
+      let matchesStatus = true;
+      if (filterStatus !== "ALL") {
+        const isExpiringSoon = doc.retentionPeriod && new Date(doc.retentionPeriod).getTime() - new Date().getTime() <= 30 * 24 * 60 * 60 * 1000 && !doc.isExpired;
+        
+        if (filterStatus === "ACTIVE") {
+           matchesStatus = !doc.isExpired;
+        } else if (filterStatus === "EXPIRING_SOON") {
+           matchesStatus = Boolean(isExpiringSoon);
+        } else if (filterStatus === "EXPIRED") {
+           matchesStatus = Boolean(doc.isExpired);
+        }
+      }
+
       return (
         matchesSearch &&
         matchesDate &&
         matchesType &&
         matchesDept &&
         matchesUploader &&
-        matchesCustom
+        matchesCustom &&
+        matchesStatus
       );
+    });
+
+    // Apply Sorting
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "DATE_ASC":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "TITLE_ASC":
+          return a.title.localeCompare(b.title);
+        case "TITLE_DESC":
+          return b.title.localeCompare(a.title);
+        case "DATE_DESC":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
     });
   }, [
     documents,
@@ -284,6 +316,8 @@ export default function DocumentList({
     filterDepartmentId,
     filterUploaderName,
     filterCustomFields,
+    filterStatus,
+    sortBy,
     deepSearchDocs,
   ]);
 
@@ -492,6 +526,23 @@ export default function DocumentList({
                   <Building2 className="h-4 w-4 text-slate-400 dark:text-white" />
                 </div>
               </div>
+
+              {/* Sort By */}
+              <div className="w-full md:w-48 relative">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
+                >
+                  <option value="DATE_DESC">เรียงตามวันที่ล่าสุด</option>
+                  <option value="DATE_ASC">เรียงตามวันที่เก่าสุด</option>
+                  <option value="TITLE_ASC">เรียงตามชื่อเอกสาร (ก-ฮ)</option>
+                  <option value="TITLE_DESC">เรียงตามชื่อเอกสาร (ฮ-ก)</option>
+                </select>
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Filter className="h-4 w-4 text-slate-400 dark:text-white" />
+                </div>
+              </div>
             </div>
 
             <button
@@ -529,6 +580,26 @@ export default function DocumentList({
                   </select>
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">สถานะเอกสาร</label>
+                <div className="relative">
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
+                  >
+                    <option value="ALL">ทุกสถานะ</option>
+                    <option value="ACTIVE">ยังใช้งานได้</option>
+                    <option value="EXPIRING_SOON">ใกล้หมดอายุ</option>
+                    <option value="EXPIRED">หมดอายุแล้ว</option>
+                  </select>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <CheckCircle className="h-4 w-4 text-slate-400 dark:text-white" />
                   </div>
                 </div>
               </div>
@@ -638,6 +709,8 @@ export default function DocumentList({
                     setFilterEndDate("");
                     setFilterDepartmentId("ALL");
                     setFilterUploaderName("ALL");
+                    setFilterType("ALL");
+                    setFilterStatus("ALL");
                     setFilterCustomFields({});
                   }}
                   className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex items-center gap-1.5"
