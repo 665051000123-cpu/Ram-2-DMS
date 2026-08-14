@@ -26,6 +26,7 @@ import {
   Unlink,
   MessageSquare,
   Inbox,
+  History,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -168,6 +169,26 @@ export default function DocumentList({
     file: null,
   });
   const [isEditing, setIsEditing] = useState(false);
+
+  // Bulk Actions State
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+
+  // Audit Log State
+  const [auditLogModal, setAuditLogModal] = useState<{
+    isOpen: boolean;
+    docId: string;
+    docTitle: string;
+    logs: any[];
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    docId: "",
+    docTitle: "",
+    logs: [],
+    isLoading: false,
+  });
 
   const [viewModal, setViewModal] = useState<{
     isOpen: boolean;
@@ -397,7 +418,90 @@ export default function DocumentList({
       setDocuments(documents.filter((d) => d.id !== docId));
       toast.success("ลบเอกสารสำเร็จ");
     } catch (error) {
-      toast.error("ไม่สามารถลบเอกสารได้ หรือคุณไม่มีสิทธิ์");
+      toast.error("ไม่สามารถลบเอกสารได้ กรุณาตรวจสอบสิทธิ์");
+    }
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedDocIds(filteredDocs.map(d => d.id));
+    } else {
+      setSelectedDocIds([]);
+    }
+  };
+
+  const handleSelectRow = (docId: string) => {
+    setSelectedDocIds(prev => 
+      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`คุณต้องการลบเอกสารที่เลือกจำนวน ${selectedDocIds.length} รายการใช่หรือไม่?`)) return;
+    
+    setIsBulkDeleting(true);
+    try {
+      const res = await fetch("/api/documents/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentIds: selectedDocIds }),
+      });
+      if (!res.ok) throw new Error("Bulk delete failed");
+      
+      const data = await res.json();
+      setDocuments(documents.filter((d) => !selectedDocIds.includes(d.id)));
+      setSelectedDocIds([]);
+      toast.success(`ลบเอกสารสำเร็จ ${data.deletedCount} รายการ`);
+    } catch (error) {
+      toast.error("เกิดข้อผิดพลาดในการลบเอกสาร กรุณาตรวจสอบสิทธิ์");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    setIsBulkDownloading(true);
+    try {
+      const res = await fetch("/api/documents/bulk-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentIds: selectedDocIds }),
+      });
+      
+      if (!res.ok) {
+        throw new Error("Bulk download failed");
+      }
+      
+      // Handle file download
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bulk_download_${new Date().getTime()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success("ดาวน์โหลดเอกสารสำเร็จ");
+      setSelectedDocIds([]);
+    } catch (error) {
+      toast.error("เกิดข้อผิดพลาดในการดาวน์โหลดเอกสาร");
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
+
+  const fetchAuditLogs = async (docId: string, docTitle: string) => {
+    setAuditLogModal(prev => ({ ...prev, isOpen: true, docId, docTitle, isLoading: true }));
+    try {
+      const res = await fetch(`/api/documents/${docId}/audit`);
+      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      const data = await res.json();
+      setAuditLogModal(prev => ({ ...prev, logs: data, isLoading: false }));
+    } catch (error) {
+      toast.error("ไม่สามารถดึงข้อมูลประวัติการใช้งานได้");
+      setAuditLogModal(prev => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -727,6 +831,14 @@ export default function DocumentList({
             <table className="w-full text-left border-collapse">
               <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
+                    <th className="font-semibold py-4 px-4 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={filteredDocs.length > 0 && selectedDocIds.length === filteredDocs.length}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
                     {hasCustomSchema && selectedDocType ? (
                       selectedDocType.schema.map((field: any) => (
@@ -758,6 +870,14 @@ export default function DocumentList({
                         key={doc.id}
                         className="hover:bg-blue-50 dark:hover:bg-blue-500/20/50"
                       >
+                                  <td className="py-4 px-4 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedDocIds.includes(doc.id)}
+                                      onChange={() => handleSelectRow(doc.id)}
+                                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                  </td>
                                   <td className="py-4 px-6">
                                     <div className="flex items-start gap-3">
                                       <button
@@ -941,10 +1061,7 @@ export default function DocumentList({
                                         className="p-2 text-slate-500 dark:text-white hover:text-green-600 hover:bg-green-50 rounded-lg transition"
                                         title="ดาวน์โหลด"
                                       >
-                                        <Download size={18} />
-                                      </a>
-
-                                      {doc.versions &&
+                                        <Download size={18} /></a><button onClick={() => fetchAuditLogs(doc.id, doc.title)} className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="????????????????? (Audit Log)"><History size={18} /></button>{doc.versions &&
                                         doc.versions.length > 0 && (
                                           <button
                                             onClick={() =>
@@ -1374,11 +1491,61 @@ export default function DocumentList({
         />
       )}
 
-      <ScannerSelectionModal
+      {auditLogModal.isOpen && (<div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-\[60\] p-4"><div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-\[80vh\]"><div className="p-6 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800"><div className="flex items-center gap-2"><History className="text-orange-500" size={24} /><h3 className="text-xl font-bold text-slate-800 dark:text-white">???????????????? (Audit Log)</h3></div><button onClick={() => setAuditLogModal({ isOpen: false, docId: "", docTitle: "", logs: [], isLoading: false })} className="p-2 text-slate-400 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors hover:text-red-500 rounded-lg"><XCircle size={24} /></button></div><div className="p-6 overflow-y-auto"><p className="text-slate-800 dark:text-white font-semibold mb-4 text-lg border-b pb-2">{auditLogModal.docTitle}</p>{auditLogModal.isLoading ? (<div className="flex justify-center p-8"><span className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></span></div>) : auditLogModal.logs.length > 0 ? (<div className="space-y-4">{auditLogModal.logs.map((log: any) => (<div key={log.id} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0 mt-0.5"><Shield size={14} className="text-slate-500 dark:text-slate-400" /></div><div><p className="text-sm font-medium text-slate-800 dark:text-white"><span className="text-orange-600 dark:text-orange-400">{log.user?.name || "Unknown User"}</span> {log.action === "VIEW" ? "????????????" : log.action === "DOWNLOAD" ? "???????????????" : log.action === "UPLOAD" ? "?????????????" : log.action === "EDIT" ? "???????????" : log.action === "DELETE" ? "????????" : log.action}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{format(new Date(log.createdAt), "dd MMM yyyy HH:mm:ss")} � {log.user?.department?.name || "?????????"} � {log.details}</p></div></div>))}</div>) : (<div className="text-center p-8 text-slate-500">?????????????????????</div>)}</div></div></div>)}<ScannerSelectionModal
         isOpen={showEditScannerModal}
         onClose={() => setShowEditScannerModal(false)}
         onFileSelect={handleEditScannerFileSelect}
       />
+
+      {/* Bulk Actions Toolbar */}
+      {selectedDocIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-slate-800 shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center gap-6 animate-in slide-in-from-bottom-8 duration-300">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-sm font-bold">
+              {selectedDocIds.length}
+            </span>
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">รายการที่เลือก</span>
+          </div>
+          
+          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleBulkDownload}
+              disabled={isBulkDownloading}
+              className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-medium rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors flex items-center gap-2 text-sm disabled:opacity-50"
+            >
+              {isBulkDownloading ? (
+                <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <Download size={16} />
+              )}
+              ดาวน์โหลด
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-medium rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors flex items-center gap-2 text-sm disabled:opacity-50"
+            >
+              {isBulkDeleting ? (
+                <span className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <Trash2 size={16} />
+              )}
+              ลบทั้งหมด
+            </button>
+            <button
+              onClick={() => setSelectedDocIds([])}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            >
+              <XCircle size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
+

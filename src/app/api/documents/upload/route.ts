@@ -166,19 +166,38 @@ export async function POST(req: Request) {
 
     // Auto-generate Document Code if not provided
     if (!documentCode) {
-      const year = new Date().getFullYear();
-      const currentYearDocs = await prisma.document.count({
-        where: {
-          departmentId: department.id,
-          createdAt: {
-            gte: new Date(`${year}-01-01T00:00:00.000Z`),
-            lt: new Date(`${year + 1}-01-01T00:00:00.000Z`),
-          }
+      const now = new Date();
+      const year = now.getFullYear();
+      const shortYear = String(year).slice(-2);
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      
+      let prefix = "DOC";
+      let filterCondition: any = {
+        createdAt: {
+          gte: new Date(`${year}-${month}-01T00:00:00.000Z`),
+          lt: new Date(year, now.getMonth() + 1, 1),
         }
+      };
+
+      if (documentType) {
+        const typeDoc = await prisma.documentType.findUnique({
+          where: { id: documentType }
+        });
+        if (typeDoc) {
+          // Use first 2 characters of document type name or generic DOC
+          prefix = typeDoc.name.substring(0, 2).toUpperCase() || "DOC";
+          filterCondition.documentTypeRefId = documentType;
+        }
+      } else {
+         filterCondition.departmentId = department.id;
+      }
+
+      const currentMonthDocs = await prisma.document.count({
+        where: filterCondition
       });
-      const runningNo = String(currentYearDocs + 1).padStart(3, '0');
-      const deptCode = department.name.substring(0, 3).toUpperCase(); // fallback code
-      documentCode = `${deptCode}-${year}-${runningNo}`;
+      
+      const runningNo = String(currentMonthDocs + 1).padStart(3, '0');
+      documentCode = `${prefix}-${shortYear}${month}-${runningNo}`;
     }
 
     let retentionPeriod = null;
