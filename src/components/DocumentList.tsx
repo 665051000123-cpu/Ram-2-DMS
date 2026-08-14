@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
-  Search,
+  Search, RotateCcw,
   FileText,
   Download,
   Eye,
@@ -20,6 +20,7 @@ import {
   List,
   ArrowLeft,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Building2,
   Shield,
@@ -119,6 +120,9 @@ export default function DocumentList({
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [sortBy, setSortBy] = useState("DATE_DESC");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   
   const [filterType, setFilterType] = useState("ALL");
 
@@ -345,6 +349,10 @@ export default function DocumentList({
     deepSearchDocs,
   ]);
 
+  React.useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStartDate, filterEndDate, filterType, filterDepartmentId, filterUploaderName, filterCustomFields, sortBy]);
+  const totalPages = Math.ceil(filteredDocs.length / itemsPerPage);
+  const paginatedDocs = React.useMemo(() => { const start = (currentPage - 1) * itemsPerPage; return filteredDocs.slice(start, start + itemsPerPage); }, [filteredDocs, currentPage, itemsPerPage]);
+
   const handleDeepSearch = async () => {
     if (!searchTerm.trim()) {
       setDeepSearchDocs(null);
@@ -461,7 +469,7 @@ export default function DocumentList({
     }
   };
 
-  const handleBulkDownload = async () => {
+  const handleRestoreVersion = async (docId: string, versionId: string) => { if (!confirm("??????????????????????????????????????????????????????")) return; try { const res = await fetch(`/api/documents/${docId}/versions/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ versionId }) }); if (!res.ok) throw new Error("Restore failed"); toast.success("????????????????????"); setHistoryModal({ isOpen: false, doc: null }); setTimeout(() => window.location.reload(), 1000); } catch (error) { toast.error("?????????????????????????????????"); } };  const handleBulkDownload = async () => {
     setIsBulkDownloading(true);
     try {
       const res = await fetch("/api/documents/bulk-download", {
@@ -793,7 +801,7 @@ export default function DocumentList({
               {/* Custom Fields (Dynamic) */}
               {hasCustomSchema && selectedDocType && selectedDocType.schema.map((field: any) => (
                 <div key={field.name} className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400">{field.label}</label>
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400">{field.label || field.name}</label>
                   <div className="relative">
                     {field.type === "select" ? (
                       <select
@@ -849,7 +857,7 @@ export default function DocumentList({
                     <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
                     {hasCustomSchema && selectedDocType ? (
                       selectedDocType.schema.map((field: any) => (
-                        <th key={field.name} className="font-semibold py-4 px-6 whitespace-nowrap">{field.label}</th>
+                        <th key={field.name} className="font-semibold py-4 px-6 whitespace-nowrap">{field.label || field.name}</th>
                       ))
                     ) : (
                       <>
@@ -869,8 +877,8 @@ export default function DocumentList({
                   </tr>
                 </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredDocs.length > 0 ? (
-                  filteredDocs.map((doc) => {
+                {paginatedDocs.length > 0 ? (
+                  paginatedDocs.map((doc) => {
                     const isFavorited = doc.favoritedBy?.some((f) => f.userId === currentUserId) || false;
                     return (
                       <tr
@@ -1070,7 +1078,11 @@ export default function DocumentList({
                                         className="p-2 text-slate-500 dark:text-white hover:text-green-600 hover:bg-green-50 rounded-lg transition"
                                         title="ดาวน์โหลด"
                                       >
-                                        <Download size={18} /></a><button onClick={() => fetchAuditLogs(doc.id, doc.title)} className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="????????????????? (Audit Log)"><History size={18} /></button>{doc.versions &&
+                                        <Download size={18} /></a>
+{(currentUserRole === "SUPER_ADMIN" || currentUserRole === "MANAGER") && (
+<button onClick={() => fetchAuditLogs(doc.id, doc.title)} className="p-2 text-slate-500 dark:text-white hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="ประวัติการใช้งาน (Audit Log)"><History size={18} /></button>
+)}
+{doc.versions &&
                                         doc.versions.length > 0 && (
                                           <button
                                             onClick={() =>
@@ -1152,8 +1164,7 @@ export default function DocumentList({
                   </tr>
                 )}
               </tbody>
-            </table>
-          </div>
+            </table></div>{totalPages > 1 && (<div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 gap-4"><div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400"><span>????</span><select value={itemsPerPage} onChange={(e) => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-300"><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select><span>?????????????</span></div><div className="flex items-center gap-2"><button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft size={16} /></button><span className="text-sm font-medium text-slate-600 dark:text-slate-300">???? {currentPage} ??? {totalPages}</span><button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight size={16} /></button></div></div>)}
       </div>
 
       <ConfirmModal
@@ -1469,6 +1480,12 @@ export default function DocumentList({
                       >
                         <Download size={16} /> โหลดไฟล์เก่า
                       </a>
+                      <button
+                        onClick={() => historyModal.doc && handleRestoreVersion(historyModal.doc.id, v.id)}
+                        className="px-4 py-2 bg-amber-50 dark:bg-amber-900/30 transition-colors border border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 text-sm font-medium rounded-lg transition flex items-center gap-2"
+                      >
+                        <RotateCcw size={16} /> กู้คืน
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1604,6 +1621,10 @@ export default function DocumentList({
     </div>
   );
 }
+
+
+
+
 
 
 

@@ -156,6 +156,7 @@ enum ActionType {
   DOWNLOAD
   EDIT
   DELETE
+  RESTORE_VERSION
 }
 
 model AuditLog {
@@ -256,3 +257,5 @@ model DocumentType {
   
   documents    Document[]
 }
+
+

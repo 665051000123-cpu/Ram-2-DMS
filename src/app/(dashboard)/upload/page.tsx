@@ -215,10 +215,7 @@ export default function UploadPage() {
       return;
     }
 
-    if (!folderId) {
-      toast.error("กรุณาเลือกแฟ้มจัดเก็บ");
-      return;
-    }
+    
 
     setConfirmModal({ isOpen: true });
   };
@@ -245,7 +242,6 @@ export default function UploadPage() {
         formData.append("tags", ""); // Keep empty string for schema compatibility
         if (documentTypeId) formData.append("documentTypeId", documentTypeId);
         formData.append("customFields", JSON.stringify(customFieldsData));
-        formData.append("folderId", folderId);
         formData.append("visibility", visibility);
         formData.append("sharedDepartments", JSON.stringify(sharedDepartments));
 
@@ -280,7 +276,7 @@ export default function UploadPage() {
       }
 
       if (redirectAfterUpload) {
-        router.push(`/documents?folderId=${folderId}`);
+        router.push(`/documents`);
       } else {
         // Reset form
         setFiles([]);
@@ -514,7 +510,7 @@ export default function UploadPage() {
               {documentTypeId && docTypes.find(t => t.id === documentTypeId)?.schema?.map((field: any, idx: number) => (
                 <div key={idx} className="md:col-span-1">
                   <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                    {field.label || field.name} {field.required && <span className="text-red-500">*</span>}
                   </label>
                   {field.type === 'textarea' ? (
                     <textarea
@@ -563,30 +559,7 @@ export default function UploadPage() {
               
 
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                  เลือกแฟ้มปลายทาง <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={folderId}
-                  onChange={(e) => setFolderId(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  required
-                >
-                  <option value="" disabled>-- เลือกแฟ้ม --</option>
-                  {Object.entries(groupedFolders)
-                    .sort(([a], [b]) => a.localeCompare(b, 'th'))
-                    .map(([dept, deptFolders]) => (
-                      <optgroup key={dept} label={`แผนก: ${dept}`}>
-                        {(deptFolders as any[]).map((f: any) => (
-                          <option key={f.id} value={f.id}>
-                            {f.displayName}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                </select>
-              </div>
+              
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
@@ -729,3 +702,4 @@ export default function UploadPage() {
     </div>
   );
 }
+

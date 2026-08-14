@@ -40,6 +40,48 @@ export default async function DashboardPage() {
     },
   });
 
+  const storageResult = await prisma.document.aggregate({
+    _sum: { fileSize: true },
+    where: whereClause,
+  });
+  const totalStorageMB = ((storageResult._sum.fileSize || 0) / (1024 * 1024)).toFixed(1);
+
+  const topDownloaded = await prisma.auditLog.groupBy({
+    by: ['documentId'],
+    _count: { id: true },
+    where: { action: 'DOWNLOAD', documentId: { not: null } },
+    orderBy: { _count: { id: 'desc' } },
+    take: 5,
+  });
+  
+  const topDownloadedDocs = await Promise.all(
+    topDownloaded.map(async (t) => {
+      const doc = await prisma.document.findUnique({
+        where: { id: t.documentId! },
+        select: { title: true, documentType: true, createdAt: true }
+      });
+      return { ...t, doc };
+    })
+  ).then(res => res.filter(r => r.doc));
+
+  const topDepartments = await prisma.document.groupBy({
+    by: ['departmentId'],
+    _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+    take: 5,
+  });
+
+  const topDepartmentsData = await Promise.all(
+    topDepartments.map(async (t) => {
+      if (!t.departmentId) return null;
+      const dept = await prisma.department.findUnique({
+        where: { id: t.departmentId },
+        select: { name: true }
+      });
+      return { ...t, dept };
+    })
+  ).then(res => res.filter(r => r && r.dept) as any[]);
+
   const recentDocuments = await prisma.document.findMany({
     where: whereClause,
     orderBy: { createdAt: "desc" },
@@ -161,7 +203,7 @@ export default async function DashboardPage() {
               พื้นที่จัดเก็บ
             </p>
             <p className="text-2xl font-bold text-slate-800 dark:text-white">
-              {(totalDocuments * 1.2).toFixed(1)}{" "}
+              {totalStorageMB}{" "}
               <span className="text-sm font-medium text-slate-400 dark:text-white">
                 MB
               </span>
@@ -296,9 +338,5 @@ export default async function DashboardPage() {
                 ยังไม่มีประวัติการใช้งาน
               </div>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          </div></div></div><div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8"><div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden"><div className="p-6 border-b border-slate-100 dark:border-slate-600"><h3 className="text-lg font-bold text-slate-800 dark:text-white">??????????????????????????????</h3></div><div className="p-2">{topDownloadedDocs.length > 0 ? topDownloadedDocs.map((item, idx) => (<div key={item.documentId} className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors rounded-xl"><div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">{idx + 1}</div><div className="flex-1 min-w-0"><p className="font-semibold text-slate-800 dark:text-white truncate">{item.doc?.title}</p><p className="text-xs text-slate-500 dark:text-white truncate">{item.doc?.documentType || "??????"}</p></div><div className="text-sm font-bold text-blue-600 dark:text-blue-400">{item._count.id} ?????</div></div>)) : (<div className="p-8 text-center text-slate-500 dark:text-white text-sm">??????????????????????????</div>)}</div></div>{session.user.role === "SUPER_ADMIN" && (<div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden"><div className="p-6 border-b border-slate-100 dark:border-slate-600"><h3 className="text-lg font-bold text-slate-800 dark:text-white">?????????????????????????</h3></div><div className="p-2">{topDepartmentsData.length > 0 ? topDepartmentsData.map((item, idx) => (<div key={item.departmentId} className="flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors rounded-xl"><div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm">{idx + 1}</div><div className="flex-1 min-w-0"><p className="font-semibold text-slate-800 dark:text-white truncate">{item.dept?.name}</p></div><div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{item._count.id} ????</div></div>)) : (<div className="p-8 text-center text-slate-500 dark:text-white text-sm">??????????????</div>)}</div></div>)}</div></div>);}
+
