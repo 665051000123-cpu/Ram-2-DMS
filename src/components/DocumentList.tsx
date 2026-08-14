@@ -13,6 +13,7 @@ import {
   Edit,
   Star,
   CheckCircle,
+  CheckSquare,
   XCircle,
   Folder,
   LayoutGrid,
@@ -171,6 +172,7 @@ export default function DocumentList({
   const [isEditing, setIsEditing] = useState(false);
 
   // Bulk Actions State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -649,14 +651,27 @@ export default function DocumentList({
               </div>
             </div>
 
-            <button
-              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-            >
-              <Filter size={16} />
-              ค้นหาขั้นสูง
-              <ChevronDown size={16} className={`transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const newMode = !isSelectionMode;
+                  setIsSelectionMode(newMode);
+                  if (!newMode) setSelectedDocIds([]);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors rounded-xl ${isSelectionMode ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <CheckSquare size={16} />
+                เลือกเอกสาร
+              </button>
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                <Filter size={16} />
+                ค้นหาขั้นสูง
+                <ChevronDown size={16} className={`transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+              </button>
+            </div>
           </div>
 
           {/* Advanced Filters */}
@@ -830,14 +845,7 @@ export default function DocumentList({
             <table className="w-full text-left border-collapse">
               <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
-                    <th className="font-semibold py-4 px-4 w-12 text-center">
-                      <input
-                        type="checkbox"
-                        onChange={handleSelectAll}
-                        checked={filteredDocs.length > 0 && selectedDocIds.length === filteredDocs.length}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                    </th>
+                    {isSelectionMode && (<th className="font-semibold py-4 px-4 w-12 text-center"><input type="checkbox" onChange={handleSelectAll} checked={filteredDocs.length > 0 && selectedDocIds.length === filteredDocs.length} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" /></th>)}
                     <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
                     {hasCustomSchema && selectedDocType ? (
                       selectedDocType.schema.map((field: any) => (
@@ -869,14 +877,16 @@ export default function DocumentList({
                         key={doc.id}
                         className="hover:bg-blue-50 dark:hover:bg-blue-500/20/50"
                       >
-                                  <td className="py-4 px-4 text-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedDocIds.includes(doc.id)}
-                                      onChange={() => handleSelectRow(doc.id)}
-                                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                    />
-                                  </td>
+                                  {isSelectionMode && (
+                                    <td className="py-4 px-4 text-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedDocIds.includes(doc.id)}
+                                        onChange={() => handleSelectRow(doc.id)}
+                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                      />
+                                    </td>
+                                  )}
                                   <td className="py-4 px-6">
                                     <div className="flex items-start gap-3">
                                       <button
@@ -1594,6 +1604,8 @@ export default function DocumentList({
     </div>
   );
 }
+
+
 
 
 
