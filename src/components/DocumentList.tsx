@@ -472,7 +472,6 @@ export default function DocumentList({
         throw new Error("Bulk download failed");
       }
       
-      // Handle file download
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1491,7 +1490,7 @@ export default function DocumentList({
         />
       )}
 
-      {auditLogModal.isOpen && (<div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-\[60\] p-4"><div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-\[80vh\]"><div className="p-6 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800"><div className="flex items-center gap-2"><History className="text-orange-500" size={24} /><h3 className="text-xl font-bold text-slate-800 dark:text-white">???????????????? (Audit Log)</h3></div><button onClick={() => setAuditLogModal({ isOpen: false, docId: "", docTitle: "", logs: [], isLoading: false })} className="p-2 text-slate-400 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors hover:text-red-500 rounded-lg"><XCircle size={24} /></button></div><div className="p-6 overflow-y-auto"><p className="text-slate-800 dark:text-white font-semibold mb-4 text-lg border-b pb-2">{auditLogModal.docTitle}</p>{auditLogModal.isLoading ? (<div className="flex justify-center p-8"><span className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></span></div>) : auditLogModal.logs.length > 0 ? (<div className="space-y-4">{auditLogModal.logs.map((log: any) => (<div key={log.id} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700"><div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0 mt-0.5"><Shield size={14} className="text-slate-500 dark:text-slate-400" /></div><div><p className="text-sm font-medium text-slate-800 dark:text-white"><span className="text-orange-600 dark:text-orange-400">{log.user?.name || "Unknown User"}</span> {log.action === "VIEW" ? "????????????" : log.action === "DOWNLOAD" ? "???????????????" : log.action === "UPLOAD" ? "?????????????" : log.action === "EDIT" ? "???????????" : log.action === "DELETE" ? "????????" : log.action}</p><p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{format(new Date(log.createdAt), "dd MMM yyyy HH:mm:ss")} � {log.user?.department?.name || "?????????"} � {log.details}</p></div></div>))}</div>) : (<div className="text-center p-8 text-slate-500">?????????????????????</div>)}</div></div></div>)}<ScannerSelectionModal
+      <ScannerSelectionModal
         isOpen={showEditScannerModal}
         onClose={() => setShowEditScannerModal(false)}
         onFileSelect={handleEditScannerFileSelect}
@@ -1544,8 +1543,57 @@ export default function DocumentList({
         </div>
       )}
 
+      {/* Audit Log Modal */}
+      {auditLogModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
+              <div className="flex items-center gap-2">
+                <History className="text-orange-500" size={24} />
+                <h3 className="text-xl font-bold text-slate-800 dark:text-white">ประวัติการใช้งาน (Audit Log)</h3>
+              </div>
+              <button 
+                onClick={() => setAuditLogModal({ isOpen: false, docId: "", docTitle: "", logs: [], isLoading: false })} 
+                className="p-2 text-slate-400 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors hover:text-red-500 rounded-lg"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <p className="text-slate-800 dark:text-white font-semibold mb-4 text-lg border-b pb-2">{auditLogModal.docTitle}</p>
+              {auditLogModal.isLoading ? (
+                <div className="flex justify-center p-8">
+                  <span className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></span>
+                </div>
+              ) : auditLogModal.logs.length > 0 ? (
+                <div className="space-y-4">
+                  {auditLogModal.logs.map((log: any) => (
+                    <div key={log.id} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <Shield size={14} className="text-slate-500 dark:text-slate-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-800 dark:text-white">
+                          <span className="text-orange-600 dark:text-orange-400">{log.user?.name || "Unknown User"}</span> {log.action === "VIEW" ? "เปิดดูเอกสาร" : log.action === "DOWNLOAD" ? "ดาวน์โหลดเอกสาร" : log.action === "UPLOAD" ? "อัปโหลดเอกสาร" : log.action === "EDIT" ? "แก้ไขเอกสาร" : log.action === "DELETE" ? "ลบเอกสาร" : log.action}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {format(new Date(log.createdAt), "dd MMM yyyy HH:mm:ss")} • {log.user?.department?.name || "ไม่มีแผนก"} • {log.details}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center p-8 text-slate-500">ไม่มีประวัติการใช้งาน</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
 
 

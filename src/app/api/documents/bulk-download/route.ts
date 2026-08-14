@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-import archiver from "archiver";
+const archiver = require("archiver");
 import { PassThrough } from "stream";
 import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     headers.set("Content-Type", "application/zip");
     headers.set("Content-Disposition", `attachment; filename="bulk_download_${new Date().getTime()}.zip"`);
 
-    archive.on("error", (err) => {
+    archive.on("error", (err: any) => {
       console.error("Archiver error:", err);
       passThrough.end();
     });
@@ -126,3 +126,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+
