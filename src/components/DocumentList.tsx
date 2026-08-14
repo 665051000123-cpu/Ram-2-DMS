@@ -209,6 +209,9 @@ export default function DocumentList({
 
   const filteredDocs = useMemo(() => {
     let filtered = documents.filter((doc) => {
+      // Exclude expired documents from the main list
+      if (doc.isExpired) return false;
+
       // 1. Text Search (Local or Deep Search)
       let matchesSearch = true;
       if (deepSearchDocs !== null) {
@@ -271,14 +274,12 @@ export default function DocumentList({
       // 7. Status Filter
       let matchesStatus = true;
       if (filterStatus !== "ALL") {
-        const isExpiringSoon = doc.retentionPeriod && new Date(doc.retentionPeriod).getTime() - new Date().getTime() <= 30 * 24 * 60 * 60 * 1000 && !doc.isExpired;
+        const isExpiringSoon = doc.retentionPeriod && new Date(doc.retentionPeriod).getTime() - new Date().getTime() <= 30 * 24 * 60 * 60 * 1000;
         
         if (filterStatus === "ACTIVE") {
-           matchesStatus = !doc.isExpired;
+           matchesStatus = !isExpiringSoon;
         } else if (filterStatus === "EXPIRING_SOON") {
            matchesStatus = Boolean(isExpiringSoon);
-        } else if (filterStatus === "EXPIRED") {
-           matchesStatus = Boolean(doc.isExpired);
         }
       }
 
@@ -594,9 +595,8 @@ export default function DocumentList({
                     className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                   >
                     <option value="ALL">ทุกสถานะ</option>
-                    <option value="ACTIVE">ยังใช้งานได้</option>
+                    <option value="ACTIVE">ปกติ</option>
                     <option value="EXPIRING_SOON">ใกล้หมดอายุ</option>
-                    <option value="EXPIRED">หมดอายุแล้ว</option>
                   </select>
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <CheckCircle className="h-4 w-4 text-slate-400 dark:text-white" />
