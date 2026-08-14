@@ -37,4 +37,3 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 commit message ต้องเป็น ภาษาไทย เช่น "เพิ่มฟีเจอร์ A", "แก้ไขบั๊ก B"
 
 
-- รายงานการแก้ไขโคดหรืออะไรก็แล้วแต่ที่เป็นบอกว่าแก้อะไรไปบ้างมีอะไรบ้างขอเป็นภาษาไทย

@@ -476,25 +476,20 @@ export default function DocumentList({
         <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col gap-4">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto">
-              {/* Document Type Filter */}
+              {/* Department Filter */}
               <div className="w-full md:w-48 relative">
                 <select
-                  value={filterType}
-                  onChange={(e) => {
-                    setFilterType(e.target.value);
-                    setFilterCustomFields({}); // Reset custom fields when type changes
-                  }}
+                  value={filterDepartmentId}
+                  onChange={(e) => setFilterDepartmentId(e.target.value)}
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                 >
-                  <option value="ALL">ทุกประเภท</option>
-                  {documentTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
+                  <option value="ALL">ทุกแผนก</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
                   ))}
                 </select>
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
+                  <Building2 className="h-4 w-4 text-slate-400 dark:text-white" />
                 </div>
               </div>
             </div>
@@ -513,22 +508,27 @@ export default function DocumentList({
           {showAdvancedFilters && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-700/50 animate-in fade-in slide-in-from-top-4 duration-200">
               
-              {/* Department */}
+              {/* Document Type Filter */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">แผนก</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ประเภทเอกสาร</label>
                 <div className="relative">
                   <select
-                    value={filterDepartmentId}
-                    onChange={(e) => setFilterDepartmentId(e.target.value)}
+                    value={filterType}
+                    onChange={(e) => {
+                      setFilterType(e.target.value);
+                      setFilterCustomFields({}); // Reset custom fields when type changes
+                    }}
                     className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                   >
-                    <option value="ALL">ทุกแผนก</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    <option value="ALL">ทุกประเภท</option>
+                    {documentTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
                     ))}
                   </select>
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Building2 className="h-4 w-4 text-slate-400 dark:text-white" />
+                    <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
                   </div>
                 </div>
               </div>
