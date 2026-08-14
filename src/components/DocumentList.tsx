@@ -32,7 +32,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
 import ScannerSelectionModal from "./ScannerSelectionModal";
-import FolderAccessModal from "./FolderAccessModal";
+
 import DocumentLinkModal from "./DocumentLinkModal";
 import DocumentCommentModal from "./DocumentCommentModal";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -87,7 +87,6 @@ export default function DocumentList({
   currentUserId,
   currentUserRole,
   currentUserDepartmentId,
-  folders = [],
   departments = [],
   documentTypes = [],
 }: {
@@ -95,7 +94,6 @@ export default function DocumentList({
   currentUserId: string;
   currentUserRole: string;
   currentUserDepartmentId?: string | null;
-  folders?: { id: string; name: string; parentId: string | null; description: string | null; departmentId: string | null; }[];
   departments?: { id: string; name: string; }[];
   documentTypes?: { id: string; name: string; schema: any }[];
 }) {
@@ -124,34 +122,7 @@ export default function DocumentList({
   const [deepSearchDocs, setDeepSearchDocs] = useState<string[] | null>(null);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
 
-  const [viewMode, setViewMode] = useState<"folder" | "list">("folder");
-  const [currentPath, setCurrentPath] = useState<{ id: string; name: string; type: "department" | "folder" }[]>([]);
 
-  const searchParams = useSearchParams();
-  const folderIdParam = searchParams.get('folderId');
-
-  useEffect(() => {
-    if (folderIdParam && folders && folders.length > 0 && departments && departments.length > 0) {
-      const targetFolder = folders.find(f => f.id === folderIdParam);
-      if (targetFolder) {
-        const dept = departments.find(d => d.id === targetFolder.departmentId);
-        if (dept) {
-          const path: { id: string, name: string, type: "department" | "folder" }[] = [{ id: dept.id, name: dept.name, type: "department" }];
-          
-          if (targetFolder.parentId) {
-            const parent = folders.find(f => f.id === targetFolder.parentId);
-            if (parent) {
-               path.push({ id: parent.id, name: parent.name, type: "folder" });
-            }
-          }
-          
-          path.push({ id: targetFolder.id, name: targetFolder.name, type: "folder" });
-          setCurrentPath(path);
-          setViewMode("folder");
-        }
-      }
-    }
-  }, [folderIdParam, folders, departments]);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -220,108 +191,9 @@ export default function DocumentList({
     doc: null,
   });
 
-  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-
-  const [manageAccessModal, setManageAccessModal] = useState<{
-    isOpen: boolean;
-    folderId: string;
-    folderName: string;
-  }>({
-    isOpen: false,
-    folderId: "",
-    folderName: "",
-  });
 
 
 
-  const handleCreateFolder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-
-    setIsCreatingFolder(true);
-    try {
-      let departmentId = null;
-      let parentId = null;
-
-      if (currentPath.length > 0) {
-        const firstNode = currentPath[0];
-        if (firstNode.type === "department") {
-          departmentId = firstNode.id;
-        }
-
-        const currentNode = currentPath[currentPath.length - 1];
-        if (currentNode.type === "folder") {
-          parentId = currentNode.id;
-        }
-      }
-
-      let res;
-      if (currentPath.length === 0) {
-        res = await fetch("/api/departments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: newFolderName.trim()
-          }),
-        });
-      } else {
-        res = await fetch("/api/folders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: newFolderName.trim(),
-            departmentId,
-            parentId
-          }),
-        });
-      }
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to create item");
-      }
-
-      toast.success(currentPath.length === 0 ? "เพิ่มแผนกใหม่สำเร็จ" : "สร้างแฟ้มย่อยสำเร็จ");
-      setShowCreateFolderModal(false);
-      setNewFolderName("");
-      window.location.reload();
-    } catch (error: any) {
-      toast.error(error.message || "เกิดข้อผิดพลาดในการสร้างหมวดหมู่");
-    } finally {
-      setIsCreatingFolder(false);
-    }
-  };
-
-
-
-  const folderStats = useMemo(() => {
-    const folderMap = new Map<string, { id: string, name: string, count: number }>();
-
-    if (folders && folders.length > 0) {
-      folders.forEach((f) => {
-        folderMap.set(f.id, { id: f.id, name: f.name, count: 0 });
-      });
-    }
-
-    documents.forEach((doc) => {
-      const folderId = doc.folder?.id || "unknown";
-      const folderName = doc.folder?.name || "เอกสารทั่วไป (ไม่มีแฟ้ม)";
-      if (folderMap.has(folderId)) {
-        folderMap.get(folderId)!.count += 1;
-      } else {
-        folderMap.set(folderId, { id: folderId, name: folderName, count: 1 });
-      }
-    });
-
-    return Array.from(folderMap.values())
-      .sort((a, b) => {
-        if (a.id === "unknown") return 1;
-        if (b.id === "unknown") return -1;
-        return a.name.localeCompare(b.name, "th");
-      });
-  }, [documents, folders]);
 
   const filteredDocs = useMemo(() => {
     return documents.filter((doc) => {
@@ -344,33 +216,23 @@ export default function DocumentList({
         matchesDate = docDate === filterDate;
       }
 
-      // 3. Folder Filter
-      let matchesFolder = true;
-      if (filterFolder !== "ALL") {
-        matchesFolder = doc.folder?.id === filterFolder;
-      }
-
-      // 4. Type Filter
+      // 3. Type Filter
       let matchesType = true;
       if (filterType !== "ALL") {
         matchesType = doc.documentTypeId === filterType || doc.documentType === filterType;
       }
 
-
       return (
         matchesSearch &&
         matchesDate &&
-        matchesType &&
-        matchesFolder
+        matchesType
       );
     });
   }, [
     documents,
     searchTerm,
     filterDate,
-    filterFolder,
     filterType,
-    currentPath,
     deepSearchDocs,
   ]);
 
@@ -515,97 +377,56 @@ export default function DocumentList({
       <div className="p-4 md:p-6 border-b border-slate-200 dark:border-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 dark:bg-slate-800">
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-1 flex-wrap">
-            {viewMode === "folder" ? (
-              <>
-                <span 
-                  className={currentPath.length === 0 ? "" : "text-slate-500 cursor-pointer hover:text-blue-500"} 
-                  onClick={() => setCurrentPath([])}
-                >
-                  หน้าหลัก
-                </span>
-                {currentPath.map((path, index) => (
-                  <React.Fragment key={`bc-${path.id}`}>
-                    <ChevronRight size={18} className="text-slate-400 mt-0.5" />
-                    <span 
-                      className={index === currentPath.length - 1 ? "" : "text-slate-500 cursor-pointer hover:text-blue-500"}
-                      onClick={() => setCurrentPath(currentPath.slice(0, index + 1))}
-                    >
-                      {path.type === 'department' ? `แผนก ${path.name}` : path.name}
-                    </span>
-                  </React.Fragment>
-                ))}
-              </>
-            ) : (
-              "รายการเอกสารทั้งหมด"
-            )}
+            รายการเอกสารทั้งหมด
           </h2>
           <p className="text-sm text-slate-500 dark:text-white mt-1">
-            {viewMode === "folder"
-              ? currentPath.length === 0 ? `พบ ${departments?.length || 0} แผนกหมวดหมู่` : ''
-              : `พบเอกสารทั้งหมด ${filteredDocs.length} รายการ`}
+            พบเอกสารทั้งหมด {filteredDocs.length} รายการ
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          {(currentUserRole === "SUPER_ADMIN" || (currentUserRole === "DEPT_HEAD" && currentPath.length > 0)) && (
-            <button
-              onClick={() => setShowCreateFolderModal(true)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border
-                bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 
-                dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 dark:hover:bg-blue-500/30
-              `}
-            >
-              {currentPath.length === 0 ? <Building2 size={16} /> : <Folder size={16} />} {currentPath.length === 0 ? "เพิ่มแผนกใหม่" : "สร้างแฟ้มย่อย"}
-            </button>
-          )}
+        {/* Search */}
+        <div className="relative flex-1 w-full flex items-center gap-2">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-slate-400 dark:text-white" />
+            </div>
+            <input
+              type="text"
+              placeholder="ค้นหาชื่อเอกสาร รหัสเอกสาร หรือ Tags..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (deepSearchDocs !== null) setDeepSearchDocs(null); // Reset deep search on change
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleDeepSearch();
+              }}
+              className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
+            />
+          </div>
+          <button
+            onClick={handleDeepSearch}
+            disabled={isDeepSearching || !searchTerm.trim()}
+            className="px-4 py-2.5 bg-slate-800 dark:bg-slate-800 text-white font-medium rounded-xl hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed whitespace-nowrap shadow-sm flex items-center gap-2"
+            title="ค้นหาลึกถึงเนื้อหาในไฟล์ (OCR/PDF)"
+          >
+            {isDeepSearching ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            ) : (
+              <Search size={16} />
+            )}
+            <span className="hidden sm:inline">ค้นหาเนื้อหา</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. เนื้อหา (Document List & Folders) */}
-      <>
+      {/* 2. เนื้อหา (Document List) */}
+      <div className="flex flex-col">
         {/* Filters Toolbar */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col md:flex-row gap-4 items-center">
 
-            {/* Search */}
-            <div className="relative flex-1 w-full flex items-center gap-2">
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-slate-400 dark:text-white" />
-                </div>
-                <input
-                  type="text"
-                  placeholder={currentPath.length === 0 ? "ค้นหาแผนก..." : "ค้นหาชื่อเอกสาร แฟ้มย่อย หรือ Tags..."}
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    if (deepSearchDocs !== null) setDeepSearchDocs(null); // Reset deep search on change
-                  }}
-                  onKeyDown={(e) => {
-                    if (currentPath.length > 0 && e.key === "Enter") handleDeepSearch();
-                  }}
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
-                />
-              </div>
-              {currentPath.length > 0 && (
-                <button
-                  onClick={handleDeepSearch}
-                  disabled={isDeepSearching || !searchTerm.trim()}
-                  className="px-4 py-2.5 bg-slate-800 dark:bg-slate-800 text-white font-medium rounded-xl hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed whitespace-nowrap shadow-sm flex items-center gap-2"
-                  title="ค้นหาลึกลงไปถึงเนื้อหาด้านในเอกสาร (OCR/PDF)"
-                >
-                  {isDeepSearching ? (
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  ) : (
-                    <Search size={16} />
-                  )}
-                  <span className="hidden sm:inline">ค้นหาเนื้อหา</span>
-                </button>
-              )}
-            </div>
 
             {/* Document Type Filter */}
-            {currentPath.length > 0 && (
-              <div className="md:w-48 relative">
+            <div className="md:w-48 relative">
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -622,11 +443,9 @@ export default function DocumentList({
                   <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
                 </div>
               </div>
-            )}
 
             {/* Date Filter */}
-            {currentPath.length > 0 && (
-              <div className="md:w-48 relative group">
+            <div className="md:w-48 relative group">
                 <input
                   type="text"
                   readOnly
@@ -651,7 +470,6 @@ export default function DocumentList({
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
               </div>
-            )}
 
 
           </div>
@@ -659,8 +477,7 @@ export default function DocumentList({
           {/* 2. ตารางแสดงเอกสาร */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              {currentPath.length > 0 && (
-                <thead>
+              <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
                     <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
                     {hasCustomSchema && selectedDocType ? (
@@ -681,160 +498,18 @@ export default function DocumentList({
                     {!hasCustomSchema && (
                       <th className="font-semibold py-4 px-6">ขนาดไฟล์</th>
                     )}
-                    <th className="font-semibold py-4 px-6 text-center">
-                      จัดการ
-                    </th>
+                    <th className="font-semibold py-4 px-6 text-center">จัดการ</th>
                   </tr>
                 </thead>
-              )}
               <tbody className="divide-y divide-slate-100">
-                {filteredDocs.length > 0 || (viewMode === "folder" && currentPath.length === 0) ? (
-                  (() => {
-                    const isFolderView = viewMode === "folder";
-                    
-                    let visibleDepartments: typeof departments = [];
-                    let visibleFolders: typeof folders = [];
-                    let visibleDocs: Document[] = [];
-
-                    if (!isFolderView) {
-                      visibleDocs = filteredDocs;
-                    } else {
-                      const currentLevel = currentPath.length === 0 ? null : currentPath[currentPath.length - 1];
-                      const searchLower = searchTerm.toLowerCase();
-
-                      if (!currentLevel) {
-                        visibleDepartments = departments || [];
-                        if (searchTerm) {
-                          visibleDepartments = visibleDepartments.filter(d => 
-                            d.name.toLowerCase().includes(searchLower)
-                          );
-                        }
-                      } else if (currentLevel.type === "department") {
-                        visibleFolders = folders.filter(f => f.departmentId === currentLevel.id && !f.parentId);
-                        if (searchTerm) {
-                          visibleFolders = visibleFolders.filter(f => 
-                            f.name.toLowerCase().includes(searchLower)
-                          );
-                        }
-                        visibleDocs = filteredDocs.filter(d => d.departmentId === currentLevel.id && !d.folder);
-                      } else if (currentLevel.type === "folder") {
-                        visibleFolders = folders.filter(f => f.parentId === currentLevel.id);
-                        if (searchTerm) {
-                          visibleFolders = visibleFolders.filter(f => 
-                            f.name.toLowerCase().includes(searchLower)
-                          );
-                        }
-                        visibleDocs = filteredDocs.filter(d => d.folder?.id === currentLevel.id);
-                      }
-                    }
-
+                {filteredDocs.length > 0 ? (
+                  filteredDocs.map((doc) => {
+                    const isFavorited = doc.favoritedBy?.some((f) => f.userId === currentUserId) || false;
                     return (
-                      <>
-                        {isFolderView && currentPath.length > 0 && (
-                          <tr
-                            className="bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
-                            onClick={() => {
-                              setCurrentPath(prev => prev.slice(0, -1));
-                            }}
-                          >
-                            <td
-                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
-                              className="py-3 px-6 text-sm font-medium text-slate-600 dark:text-slate-300 border-y border-slate-200 dark:border-slate-700"
-                            >
-                              <div className="flex items-center gap-2">
-                                <ArrowLeft size={16} /> กลับไประดับก่อนหน้า
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-
-                        {visibleDepartments?.map((dept) => {
-                          const subFoldersCount = folders.filter(f => f.departmentId === dept.id && !f.parentId).length;
-                          const docsCount = documents.filter(d => d.departmentId === dept.id && !d.folder).length;
-                          return (
-                          <tr
-                            key={`dept-${dept.id}`}
-                            className="bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                            onClick={() => setCurrentPath([{ id: dept.id, name: dept.name, type: "department" }])}
-                          >
-                            <td
-                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
-                              className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <Building2 size={20} className="text-slate-600 dark:text-slate-300" />
-                                  {dept.name}
-                                </div>
-                                <div className="flex items-center gap-4 text-xs font-normal text-slate-500 dark:text-slate-400">
-                                  {subFoldersCount > 0 && <span>{subFoldersCount} แฟ้มย่อย</span>}
-                                  {docsCount > 0 && <span>{docsCount} เอกสาร</span>}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )})}
-
-                        {visibleFolders.map((folder) => {
-                          const subFoldersCount = folders.filter(f => f.parentId === folder.id).length;
-                          const docsCount = documents.filter(d => d.folder?.id === folder.id).length;
-                          return (
-                          <tr
-                            key={`folder-${folder.id}`}
-                            className="bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                            onClick={() => setCurrentPath(prev => [...prev, { id: folder.id, name: folder.name, type: "folder" }])}
-                          >
-                            <td
-                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
-                              className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <Folder
-                                    size={20}
-                                    className="text-blue-600 dark:text-blue-300"
-                                  />
-                                  {folder.name}
-                                  {folder.description && (
-                                    <span className="text-xs font-normal text-slate-500 dark:text-slate-400 ml-2">
-                                      - {folder.description}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-4">
-                                  <div className="flex items-center gap-3 text-xs font-normal text-slate-500 dark:text-slate-400">
-                                    {subFoldersCount > 0 && <span>{subFoldersCount} แฟ้มย่อย</span>}
-                                    {docsCount > 0 && <span>{docsCount} เอกสาร</span>}
-                                  </div>
-                                  {currentUserRole === "SUPER_ADMIN" && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setManageAccessModal({ isOpen: true, folderId: folder.id, folderName: folder.name });
-                                      }}
-                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
-                                      title="จัดการสิทธิ์การเข้าถึง"
-                                    >
-                                      <Shield size={16} /> <span className="text-xs ml-1 hidden sm:inline">จัดการสิทธิ์</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )})}
-
-                        {visibleDocs.map((doc) => {
-                          const isFavorited =
-                            doc.favoritedBy?.some(
-                              (f) => f.userId === currentUserId,
-                            ) || false;
-
-                              return (
-                                <tr
-                                  key={doc.id}
-                                  className="hover:bg-blue-50 dark:hover:bg-blue-500/20/50"
-                                >
+                      <tr
+                        key={doc.id}
+                        className="hover:bg-blue-50 dark:hover:bg-blue-500/20/50"
+                      >
                                   <td className="py-4 px-6">
                                     <div className="flex items-start gap-3">
                                       <button
@@ -1085,10 +760,7 @@ export default function DocumentList({
                                   </td>
                                 </tr>
                               );
-                            })}
-                        </>
-                      );
-                  })()
+                            })
                 ) : (
                   <tr>
                     <td
@@ -1108,7 +780,7 @@ export default function DocumentList({
               </tbody>
             </table>
           </div>
-        </>
+      </div>
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -1432,59 +1104,7 @@ export default function DocumentList({
         </div>
       )}
 
-      {/* Create Folder Modal */}
-      {showCreateFolderModal && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4">
-          <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-xl font-bold text-slate-800 dark:text-white">
-                {currentPath.length === 0 ? "สร้างหมวดหมู่เอกสารใหม่" : "สร้างแฟ้มย่อยใหม่"}
-              </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                {currentPath.length === 0 ? "กำหนดชื่อแผนกหรือหมวดหมู่เอกสาร" : "กำหนดชื่อแฟ้มย่อย"}
-              </p>
-            </div>
-            <form onSubmit={handleCreateFolder} className="p-6 space-y-4 bg-slate-50 dark:bg-slate-800">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  {currentPath.length === 0 ? "ชื่อหมวดหมู่" : "ชื่อแฟ้มย่อย"}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
-                  placeholder="เช่น แผนกบัญชี, จัดซื้อ..."
-                />
-              </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-2 border-t border-slate-200 dark:border-slate-700">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateFolderModal(false)}
-                  className="px-4 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  disabled={isCreatingFolder || !newFolderName.trim()}
-                  className="px-4 py-2.5 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isCreatingFolder ? "กำลังสร้าง..." : "บันทึก"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      <FolderAccessModal
-        isOpen={manageAccessModal.isOpen}
-        onClose={() => setManageAccessModal({ ...manageAccessModal, isOpen: false })}
-        folderId={manageAccessModal.folderId}
-        folderName={manageAccessModal.folderName}
-      />
 
       {linkModal.isOpen && linkModal.doc && (
         <DocumentLinkModal 

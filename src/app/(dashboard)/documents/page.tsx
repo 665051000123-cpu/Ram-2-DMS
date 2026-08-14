@@ -108,7 +108,6 @@ export default async function DocumentsPage() {
         currentUserId={session.user.id}
         currentUserRole={session.user.role}
         currentUserDepartmentId={session.user.departmentId}
-        folders={accessibleFolders}
         departments={departments}
         documentTypes={documentTypes}
       />
