@@ -19,16 +19,24 @@ enum Role {
   STAFF
 }
 
+enum Visibility {
+  PRIVATE
+  PUBLIC
+  CUSTOM
+}
+
 model Department {
   id        String   @id @default(uuid())
   name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users        User[]
-  documents    Document[]
-  folders      Folder[]
-  folderAccess FolderAccess[]
+  users          User[]
+  documents      Document[] @relation("DocumentDepartment")
+  sharedDocuments Document[] @relation("DocumentSharedDepartments")
+  folders        Folder[]
+  folderAccess   FolderAccess[]
+  documentTypes  DocumentType[]
 }
 
 model User {
@@ -66,7 +74,12 @@ model Document {
   storagePath    String? // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลด (เช่น D:\DMS_Uploads)
   extractedText  String? @db.LongText // ข้อความที่สกัดจากไฟล์ (OCR/PDF Parsing)
   tags           String // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
-  documentType   String? // ประเภท 'หนังสือเวียน', 'ประกาศ', 'คำสั่ง'
+  documentType    String? // (Legacy)
+  
+  documentTypeId  String?
+  documentTypeRef DocumentType? @relation(fields: [documentTypeId], references: [id])
+  customFields    Json?
+  
   currentVersion Int     @default(1)
 
   documentCode    String?   @unique
@@ -74,7 +87,10 @@ model Document {
   isExpired       Boolean   @default(false)
 
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
+  department   Department @relation("DocumentDepartment", fields: [departmentId], references: [id])
+
+  visibility   Visibility @default(PRIVATE)
+  sharedDepartments Department[] @relation("DocumentSharedDepartments")
 
   folderId String?
   folder   Folder? @relation(fields: [folderId], references: [id])
@@ -226,4 +242,17 @@ model Comment {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model DocumentType {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  schema       Json
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  documents    Document[]
 }

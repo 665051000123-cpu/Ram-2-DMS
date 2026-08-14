@@ -157,9 +157,10 @@ export default function RecycleBinList({
         }
         message={
           confirmModal.action === "RESTORE"
-            ? "เอกสารจะถูกกู้คืนกลับไปยังแผนกเดิม คุณแน่ใจหรือไม่?"
-            : "การลบนี้จะไม่สามารถกู้คืนได้อีกเลย (ไฟล์ถูกลบออกจาก Server ถาวร) คุณแน่ใจหรือไม่?"
+            ? "เอกสารนี้จะถูกกู้คืนกลับไปยังแฟ้มเดิม หรือแผนกทั่วไปหากแฟ้มถูกลบไปแล้ว คุณแน่ใจหรือไม่?"
+            : "การลบนี้จะไม่สามารถกู้คืนได้อีก (ไฟล์จริงบน Server จะถูกลบถาวร) คุณแน่ใจหรือไม่?"
         }
+        requirePassword={confirmModal.action === "HARD_DELETE"}
         onConfirm={handleAction}
         onCancel={() =>
           setConfirmModal({ isOpen: false, docId: "", action: null })

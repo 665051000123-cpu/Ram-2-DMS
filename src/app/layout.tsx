@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import SessionTimeoutWrapper from "@/components/SessionTimeoutWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,7 +36,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           disableTransitionOnChange
         >
           <Providers>
-            {children}
+            <SessionTimeoutWrapper>
+              {children}
+            </SessionTimeoutWrapper>
             <Toaster position="top-center" />
           </Providers>
         </ThemeProvider>

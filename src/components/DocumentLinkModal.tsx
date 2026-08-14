@@ -64,29 +64,15 @@ export default function DocumentLinkModal({
       const res = await fetch(`/api/documents/search?q=${encodeURIComponent(searchQuery)}`);
       if (res.ok) {
         const data = await res.json();
-        const docRes = await fetch(`/api/documents`);
-        if (docRes.ok) {
-          const docData = await docRes.json();
-          let allDocs = docData.documents || [];
-          
-          if (data.documentIds && data.documentIds.length > 0) {
-             allDocs = allDocs.filter((d: any) => data.documentIds.includes(d.id));
-          } else {
-             // fallback basic filter
-             allDocs = allDocs.filter((d: any) => 
-               d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               (d.documentCode && d.documentCode.toLowerCase().includes(searchQuery.toLowerCase()))
-             );
-          }
-          
-          // filter out self and already linked
-          const availableDocs = allDocs.filter((d: any) => 
-             d.id !== docId && 
-             !links.some(l => l.document.id === d.id)
-          );
-          
-          setSearchResults(availableDocs);
-        }
+        let allDocs = data.documents || [];
+        
+        // filter out self and already linked
+        const availableDocs = allDocs.filter((d: any) => 
+           d.id !== docId && 
+           !links.some(l => l.document.id === d.id)
+        );
+        
+        setSearchResults(availableDocs);
       }
     } catch (error) {
       toast.error("ค้นหาเอกสารไม่สำเร็จ");

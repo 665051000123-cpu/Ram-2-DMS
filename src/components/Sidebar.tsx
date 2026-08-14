@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
-  LayoutDashboard,
   FileText,
   UploadCloud,
   Users,
@@ -13,8 +12,6 @@ import {
   Activity,
   Trash2,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
   PieChart,
   LayoutGrid,
 } from "lucide-react";
@@ -52,6 +49,10 @@ export default function Sidebar({
     if (permissions.menu_users) {
       menuItems.push({ icon: Users, label: "จัดการผู้ใช้งาน", href: "/users" });
     }
+  }
+
+  if (session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "DEPT_HEAD") {
+    menuItems.push({ icon: Settings, label: "จัดการประเภทเอกสาร", href: "/document-types" });
   }
 
   // ตั้งค่าระบบ เฉพาะ SUPER_ADMIN

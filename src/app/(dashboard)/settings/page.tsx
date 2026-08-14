@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -6,7 +9,7 @@ import DepartmentSettings from "@/components/DepartmentSettings";
 import StorageSettings from "@/components/StorageSettings";
 import FeatureSettings from "@/components/FeatureSettings";
 import RolePermissionSettings from "@/components/RolePermissionSettings";
-import FolderSettings from "@/components/FolderSettings";
+import SecuritySettings from "@/components/SecuritySettings";
 
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
@@ -39,15 +42,6 @@ export default async function SettingsPage() {
     },
   });
 
-  const folders = await prisma.folder.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      department: true,
-      parent: true,
-      _count: { select: { documents: { where: { isDeleted: false } } } }
-    }
-  });
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">
       <div>
@@ -60,8 +54,8 @@ export default async function SettingsPage() {
       </div>
 
       <FeatureSettings />
-      <FolderSettings initialFolders={folders} departments={departments} />
       <RolePermissionSettings />
+      <SecuritySettings />
       <StorageSettings />
       <DepartmentSettings initialDepartments={departments} />
     </div>

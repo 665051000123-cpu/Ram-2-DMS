@@ -57,17 +57,35 @@ export async function DELETE(
     const resolvedParams = await params;
     const folderId = resolvedParams.id;
 
-    // Check if folder has documents
+    // Check if folder has active documents
     const docCount = await prisma.document.count({
-      where: { folderId }
+      where: { folderId, isDeleted: false }
     });
 
     if (docCount > 0) {
       return NextResponse.json(
-        { error: "Cannot delete folder with existing documents. Move or delete them first." },
+        { error: "ไม่สามารถลบแฟ้มได้ เนื่องจากยังมีเอกสารใช้งานอยู่" },
         { status: 400 }
       );
     }
+
+    // Check if folder has sub-folders
+    const subFolderCount = await prisma.folder.count({
+      where: { parentId: folderId }
+    });
+
+    if (subFolderCount > 0) {
+      return NextResponse.json(
+        { error: "ไม่สามารถลบแฟ้มได้ เนื่องจากมีแฟ้มย่อยอยู่ภายใน" },
+        { status: 400 }
+      );
+    }
+
+    // Detach any soft-deleted documents from this folder before deleting
+    await prisma.document.updateMany({
+      where: { folderId },
+      data: { folderId: null }
+    });
 
     await prisma.folder.delete({
       where: { id: folderId }

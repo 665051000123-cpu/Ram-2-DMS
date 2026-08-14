@@ -7,11 +7,12 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import CameraCapture from "@/components/CameraCapture";
 import ScannerSelectionModal from "@/components/ScannerSelectionModal";
+import ConfirmModal from "@/components/ConfirmModal";
 
 export default function UploadPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [files, setFiles] = useState<{file: File, title: string, documentType: string}[]>([]);
+  const [files, setFiles] = useState<{ file: File, title: string }[]>([]);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
@@ -19,33 +20,23 @@ export default function UploadPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false });
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState(10);
+  const [allowedFileTypesStr, setAllowedFileTypesStr] = useState("pdf, jpg, png, jpeg, docx, xlsx");
+
   // Form State
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [tags, setTags] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [documentType, setDocumentType] = useState("");
+  const [documentTypeId, setDocumentTypeId] = useState("");
+  const [docTypes, setDocTypes] = useState<any[]>([]);
+  const [customFieldsData, setCustomFieldsData] = useState<Record<string, any>>({});
   const [folderId, setFolderId] = useState("");
-  const [documentCode, setDocumentCode] = useState("");
-  const [retentionPeriod, setRetentionPeriod] = useState("");
   const [folders, setFolders] = useState<any[]>([]);
 
-  const [savedTags, setSavedTags] = useState<string[]>([]);
-  const [showSavedTags, setShowSavedTags] = useState(false);
+  // Visibility State
+  const [visibility, setVisibility] = useState("PRIVATE");
+  const [sharedDepartments, setSharedDepartments] = useState<string[]>([]);
+  const [allDepartments, setAllDepartments] = useState<any[]>([]);
 
-  // Saved Document Types State
-  const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
-    "แบบฟอร์ม",
-    "ประกาศ",
-    "แนวทางปฏิบัติ",
-    "ระเบียบการ",
-    "อื่นๆ",
-  ]);
-  const [isDocTypeOpen, setIsDocTypeOpen] = useState(false);
-  const docTypeRef = useRef<HTMLDivElement>(null);
-  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-  const tagRef = useRef<HTMLDivElement>(null);
-  
   const [redirectAfterUpload, setRedirectAfterUpload] = useState(true);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannedFiles, setScannedFiles] = useState<any[]>([]);
@@ -62,116 +53,99 @@ export default function UploadPage() {
     let path = folder.name;
     let currentParentId = folder.parentId;
     let depth = 0;
-    while(currentParentId && depth < 10) {
-       const parent = allFolders.find((f: any) => f.id === currentParentId);
-       if (parent) {
-          path = parent.name + " / " + path;
-          currentParentId = parent.parentId;
-       } else {
-          if (folder.parent?.name && path === folder.name) {
-             path = folder.parent.name + " / " + path;
-          }
-          break;
-       }
-       depth++;
+    while (currentParentId && depth < 10) {
+      const parent = allFolders.find((f: any) => f.id === currentParentId);
+      if (parent) {
+        path = parent.name + " / " + path;
+        currentParentId = parent.parentId;
+      } else {
+        if (folder.parent?.name && path === folder.name) {
+          path = folder.parent.name + " / " + path;
+        }
+        break;
+      }
+      depth++;
     }
-    const deptSuffix = folder.department ? ` (ส่วนกลาง: ${folder.department.name})` : '';
-    return path + deptSuffix;
+    return path;
   };
 
-  const sortedFolders = useMemo(() => {
-    if (!folders) return [];
-    const mapped = folders.map(f => ({
-      ...f,
-      displayName: getFolderDisplayName(f, folders)
-    }));
-    return mapped.sort((a, b) => a.displayName.localeCompare(b.displayName, 'th'));
+  const groupedFolders = useMemo(() => {
+    if (!folders) return {};
+    const groups: Record<string, any[]> = {};
+
+    folders.forEach(f => {
+      const deptName = f.department?.name || 'อื่นๆ (ไม่ระบุแผนก)';
+      if (!groups[deptName]) groups[deptName] = [];
+      groups[deptName].push({
+        ...f,
+        displayName: getFolderDisplayName(f, folders)
+      });
+    });
+
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => a.displayName.localeCompare(b.displayName, 'th'));
+    });
+
+    return groups;
   }, [folders]);
 
-  // Load saved tags and preferences on mount
+  // Load saved preferences on mount
   useEffect(() => {
-    const loadedTags = localStorage.getItem("dms_saved_tags");
-    if (loadedTags) {
-      setSavedTags(JSON.parse(loadedTags));
-    }
 
-    const loadedDocTypes = localStorage.getItem("dms_saved_doctypes");
-    if (loadedDocTypes) {
-      setSavedDocTypes(JSON.parse(loadedDocTypes));
-    }
     
     const savedRedirect = localStorage.getItem("dms_redirect_after_upload");
     if (savedRedirect !== null) {
       setRedirectAfterUpload(savedRedirect === "true");
     }
 
-    // Fetch folders
-    const fetchFolders = async () => {
+    // Fetch folders and settings
+    const fetchData = async () => {
       try {
-        const res = await fetch("/api/folders?myDeptOnly=true");
-        if (res.ok) {
-          const data = await res.json();
-          setFolders(data.folders || []);
-          if (data.folders && data.folders.length > 0) {
-            setFolderId(data.folders[0].id);
+        const [resDocTypes, resFolders, resSettings, resDepts] = await Promise.all([
+          fetch("/api/document-types"),
+          fetch("/api/folders?myDeptOnly=true"),
+          fetch("/api/settings/public"),
+          fetch("/api/departments")
+        ]);
+
+        if (resDocTypes.ok) {
+          const docTypeData = await resDocTypes.json();
+          setDocTypes(docTypeData.documentTypes || []);
+        }
+        if (resFolders.ok) {
+          const contentType = resFolders.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await resFolders.json();
+            setFolders(data.folders || []);
+            if (data.folders && data.folders.length > 0) {
+              setFolderId(data.folders[0].id);
+            }
           }
         }
+
+        if (resSettings.ok) {
+          const contentType = resSettings.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await resSettings.json();
+            setMaxFileSizeMB(data.maxFileSizeMB || 10);
+            if (data.allowedFileTypes) setAllowedFileTypesStr(data.allowedFileTypes);
+          }
+        }
+
+        if (resDepts.ok) {
+          const data = await resDepts.json();
+          setAllDepartments(Array.isArray(data) ? data : (data.departments || []));
+        }
       } catch (err) {
-        console.error("Failed to fetch folders", err);
+        console.error("Failed to fetch data", err);
       }
     };
-    fetchFolders();
+    fetchData();
   }, []);
 
-  const handleAddTagFromInput = (e?: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e && e.key !== "Enter") return;
-    if (e) e.preventDefault();
-    
-    if (!tagInput.trim()) return;
-    
-    const newTag = tagInput.trim();
-    const currentTags = tags.split(",").map(t => t.trim()).filter(Boolean);
-    
-    if (!currentTags.includes(newTag)) {
-      setTags([...currentTags, newTag].join(", "));
-    }
-    
-    if (!savedTags.includes(newTag)) {
-      const updatedSaved = [...savedTags, newTag];
-      setSavedTags(updatedSaved);
-      localStorage.setItem("dms_saved_tags", JSON.stringify(updatedSaved));
-    }
-    
-    setTagInput("");
-  };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    const currentTags = tags.split(",").map(t => t.trim()).filter(Boolean);
-    setTags(currentTags.filter(t => t !== tagToRemove).join(", "));
-  };
 
-  const handleToggleSavedTag = (tag: string) => {
-    const currentTags = tags.split(",").map(t => t.trim()).filter(Boolean);
-    if (currentTags.includes(tag)) {
-      setTags(currentTags.filter(t => t !== tag).join(", "));
-    } else {
-      setTags([...currentTags, tag].join(", "));
-    }
-  };
-
-  const handleSaveDocType = () => {
-    if (!documentType.trim()) return;
-    const newType = documentType.trim();
-    if (!savedDocTypes.includes(newType)) {
-      const updatedTypes = [...savedDocTypes, newType];
-      setSavedDocTypes(updatedTypes);
-      localStorage.setItem("dms_saved_doctypes", JSON.stringify(updatedTypes));
-      toast.success("บันทึกประเภทเอกสารใหม่เรียบร้อยแล้ว");
-    } else {
-      toast.success("มีประเภทเอกสารนี้อยู่แล้ว");
-    }
-  };
-
+  
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -206,17 +180,17 @@ export default function UploadPage() {
       return;
     }
 
-    // จำกัดขนาด 10MB
-    if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error(`ไฟล์ ${selectedFile.name} มีขนาดเกิน 10MB`);
+    // ตรวจสอบขนาดไฟล์
+    if (selectedFile.size > maxFileSizeMB * 1024 * 1024) {
+      toast.error(`ไฟล์ ${selectedFile.name} มีขนาดใหญ่เกิน ${maxFileSizeMB}MB`);
       return;
     }
 
     setFiles(prev => {
-      const newFileObj = { file: selectedFile, title: selectedFile.name.split(".")[0], documentType: "" };
+      const newFileObj = { file: selectedFile, title: selectedFile.name.split(".")[0],  };
       // If not bulk mode, replace the file
       if (!isBulkMode) return [newFileObj];
-      
+
       // If bulk mode, check if already exists
       const exists = prev.some(f => f.file.name === selectedFile.name && f.file.size === selectedFile.size);
       if (exists) return prev;
@@ -233,19 +207,24 @@ export default function UploadPage() {
     setFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (files.length === 0) {
-      toast.error("กรุณาเลือกไฟล์ก่อนอัปโหลด");
+      toast.error("กรุณาเลือกไฟล์ที่ต้องการอัปโหลด");
       return;
     }
 
     if (!folderId) {
-      toast.error("กรุณาเลือกแฟ้มปลายทาง");
+      toast.error("กรุณาเลือกแฟ้มจัดเก็บ");
       return;
     }
 
+    setConfirmModal({ isOpen: true });
+  };
+
+  const executeUpload = async () => {
+    setConfirmModal({ isOpen: false });
     setIsUploading(true);
     setUploadProgress({ current: 0, total: files.length });
 
@@ -255,25 +234,21 @@ export default function UploadPage() {
       for (let i = 0; i < files.length; i++) {
         const uploadObj = files[i];
         const fileToUpload = uploadObj.file;
-        
+
         // In bulk mode, check per-file metadata first
         const finalTitle = isBulkMode && uploadObj.title ? uploadObj.title : (isBulkMode || !title ? fileToUpload.name.split(".")[0] : title);
-        const finalDocType = isBulkMode && uploadObj.documentType ? uploadObj.documentType : documentType;
         
+
         const formData = new FormData();
         formData.append("file", fileToUpload);
         formData.append("title", finalTitle);
-        formData.append("description", description);
-        formData.append("tags", tags);
-        formData.append("documentType", finalDocType);
+        formData.append("tags", ""); // Keep empty string for schema compatibility
+        if (documentTypeId) formData.append("documentTypeId", documentTypeId);
+        formData.append("customFields", JSON.stringify(customFieldsData));
         formData.append("folderId", folderId);
-        
-        // In bulk mode, we probably shouldn't use the exact same documentCode if it's supposed to be unique
-        // We'll append a number if bulk
-        const finalCode = isBulkMode && documentCode ? `${documentCode}-${i+1}` : documentCode;
-        formData.append("documentCode", finalCode);
-        formData.append("retentionPeriod", retentionPeriod);
-        
+        formData.append("visibility", visibility);
+        formData.append("sharedDepartments", JSON.stringify(sharedDepartments));
+
         // Scanned file path only applies if it's a single file and we have the path, 
         // but for bulk we'll just upload the blob directly as a normal file.
         if (scannedFilePath && files.length === 1) {
@@ -289,7 +264,7 @@ export default function UploadPage() {
           toast.error(`อัปโหลดไฟล์ ${fileToUpload.name} ไม่สำเร็จ`);
           continue; // Continue with next file
         }
-        
+
         successCount++;
         setUploadProgress({ current: i + 1, total: files.length });
       }
@@ -311,12 +286,10 @@ export default function UploadPage() {
         setFiles([]);
         setPreviewUrl(null);
         setTitle("");
-        setDescription("");
-        setTags("");
-        setTagInput("");
-        setDocumentType("");
-        setDocumentCode("");
-        setRetentionPeriod("");
+        setDocumentTypeId("");
+        setCustomFieldsData({});
+        setVisibility("PRIVATE");
+        setSharedDepartments([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     } catch (error) {
@@ -350,9 +323,9 @@ export default function UploadPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-slate-500 dark:text-slate-400">อัปโหลดหลายไฟล์ (Bulk)</span>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
                       checked={isBulkMode}
                       onChange={(e) => {
                         setIsBulkMode(e.target.checked);
@@ -366,26 +339,26 @@ export default function UploadPage() {
                 </div>
               </div>
 
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png"
+                multiple={isBulkMode}
+                onChange={handleFileChange}
+              />
+
               {files.length === 0 ? (
                 <div
-                  className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
-                    isDragging
+                  className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all ${isDragging
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-500/20"
                       : "border-slate-300 dark:border-slate-600 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors"
-                  }`}
+                    }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    multiple={isBulkMode}
-                    onChange={handleFileChange}
-                  />
                   <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-300">
                     <UploadCloud size={32} />
                   </div>
@@ -418,15 +391,28 @@ export default function UploadPage() {
               ) : (
                 <div className="space-y-3">
                   <div className="flex justify-end mb-2">
-                     {isBulkMode && (
+                    {isBulkMode && (
+                      <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
                         >
-                          + เพิ่มไฟล์อื่น
+                          + เพิ่มไฟล์จากเครื่อง
                         </button>
-                     )}
+                        <span className="text-slate-300 dark:text-slate-600">|</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowScannerModal(true);
+                          }}
+                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
+                        >
+                          <Inbox size={14} /> ดึงจากเครื่องสแกน
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {files.map((item, idx) => (
                     <div key={idx} className="border border-blue-200 bg-blue-50 dark:bg-blue-500/20/50 rounded-xl p-4 flex flex-col gap-3">
@@ -452,25 +438,9 @@ export default function UploadPage() {
                           <X size={20} />
                         </button>
                       </div>
-                      
+
                       {isBulkMode && (
                         <div className="grid grid-cols-2 gap-3 mt-2 pt-3 border-t border-blue-200/50 dark:border-blue-500/20">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                              ประเภทเอกสาร (ระบุแยกรายไฟล์)
-                            </label>
-                            <input
-                              type="text"
-                              value={item.documentType}
-                              onChange={(e) => {
-                                const newFiles = [...files];
-                                newFiles[idx].documentType = e.target.value;
-                                setFiles(newFiles);
-                              }}
-                              className="w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:border-blue-500"
-                              placeholder="เว้นว่างเพื่อใช้หมวดหมู่ด้านล่าง..."
-                            />
-                          </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                               ชื่อเอกสาร (ระบุแยกรายไฟล์)
@@ -519,189 +489,79 @@ export default function UploadPage() {
                 </div>
               )}
 
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                  รหัสเอกสาร (เว้นว่างเพื่อให้ระบบสร้างให้อัตโนมัติ)
-                </label>
-                <input
-                  type="text"
-                  value={documentCode}
-                  onChange={(e) => setDocumentCode(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  placeholder="เช่น HR-2024-001"
-                />
-              </div>
-
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                  วันที่หมดอายุ / อายุการจัดเก็บ
-                </label>
-                <div className="relative group">
-                  <input
-                    type="text"
-                    readOnly
-                    value={retentionPeriod ? format(new Date(retentionPeriod), "dd/MM/yyyy") : ""}
-                    placeholder="วว/ดด/ปปปป"
-                    className="w-full pl-4 pr-10 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all cursor-pointer"
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <Calendar className="h-5 w-5 text-slate-400 dark:text-white" />
-                  </div>
-                  <input
-                    type="date"
-                    value={retentionPeriod}
-                    onChange={(e) => setRetentionPeriod(e.target.value)}
-                    onClick={(e) => {
-                      try {
-                        if ('showPicker' in HTMLInputElement.prototype) {
-                          e.currentTarget.showPicker();
-                        }
-                      } catch (err) {}
-                    }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                </div>
-              </div>
-
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                  รายละเอียดเพิ่มเติม (ถ้ามี)
+                  ประเภทเอกสาร (Document Type)
                 </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                <select
+                  value={documentTypeId}
+                  onChange={(e) => {
+                    setDocumentTypeId(e.target.value);
+                    setCustomFieldsData({}); // Reset custom fields when type changes
+                  }}
                   className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  placeholder="เพิ่มข้อมูลที่ช่วยให้อธิบายเอกสารได้ดีขึ้น"
-                  rows={3}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
-                  ประเภทเอกสาร
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1" ref={docTypeRef}>
-                    <input
-                      value={documentType}
-                      onChange={(e) => {
-                        setDocumentType(e.target.value);
-                        setIsDocTypeOpen(true);
-                      }}
-                      onFocus={() => setIsDocTypeOpen(true)}
-                      className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all pr-10"
-                      placeholder="เลือกหรือพิมพ์ประเภทเอกสารใหม่..."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setIsDocTypeOpen(!isDocTypeOpen)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    >
-                      <ChevronDown size={20} />
-                    </button>
-
-                    {isDocTypeOpen && savedDocTypes && savedDocTypes.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
-                        {savedDocTypes.map((type, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setDocumentType(type);
-                              setIsDocTypeOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                          >
-                            {type}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveDocType}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors dark:bg-slate-700 transition-colors text-slate-700 dark:text-white text-sm font-medium rounded-xl transition whitespace-nowrap shrink-0"
-                  >
-                    บันทึกประเภท
-                  </button>
-                </div>
-              </div>
-
-              <div className="md:col-span-2 relative" ref={tagRef}>
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5 flex justify-between items-center">
-                  <span>คำค้นหา (Tags)</span>
-                </label>
-
-                <div className="w-full bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500 transition-all p-2 pr-10 flex flex-wrap gap-2 items-center relative">
-                  {(tags || "").split(",").map(t => t.trim()).filter(Boolean).map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-lg"
-                    >
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTag(tag)}
-                        className="hover:bg-blue-200 dark:hover:bg-blue-500/40 rounded-full p-0.5 transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
+                >
+                  <option value="">-- ไม่ระบุประเภท (เอกสารทั่วไป) --</option>
+                  {docTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} {type.departmentId ? ` (เฉพาะแผนก ${type.department?.name})` : " (Global)"}
+                    </option>
                   ))}
-                  <input
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => {
-                      setTagInput(e.target.value);
-                      setIsTagDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsTagDropdownOpen(true)}
-                    onKeyDown={handleAddTagFromInput}
-                    className="flex-1 min-w-[150px] bg-transparent outline-none text-slate-700 dark:text-white text-sm px-1 py-1"
-                    placeholder={tags ? "เพิ่ม Tag..." : "พิมพ์และกด Enter เพื่อเพิ่ม..."}
-                  />
-                  
-                  {savedTags.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    >
-                      <ChevronDown size={20} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleAddTagFromInput()}
-                    className="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-white text-xs font-medium rounded-lg whitespace-nowrap shrink-0 ml-auto"
-                  >
-                    เพิ่ม
-                  </button>
-                </div>
-                
-                {isTagDropdownOpen && savedTags.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto py-1">
-                    {savedTags.map((t, idx) => {
-                      const isSelected = (tags || "").split(",").map(tg => tg.trim()).filter(Boolean).includes(t);
-                      if (isSelected) return null;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            handleToggleSavedTag(t);
-                            setIsTagDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                        >
-                          {t}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                </select>
               </div>
+
+              {/* Dynamic Custom Fields */}
+              {documentTypeId && docTypes.find(t => t.id === documentTypeId)?.schema?.map((field: any, idx: number) => (
+                <div key={idx} className="md:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                  </label>
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      required={field.required}
+                      value={customFieldsData[field.name] || ''}
+                      onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                      rows={3}
+                    />
+                  ) : field.type === 'select' ? (
+                    <select
+                      required={field.required}
+                      value={customFieldsData[field.name] || ''}
+                      onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                    >
+                      <option value="" disabled>-- เลือกข้อมูล --</option>
+                      {field.options?.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string, idx: number) => (
+                        <option key={idx} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : field.type === 'checkbox' ? (
+                    <div className="flex items-center h-[42px]">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          required={field.required}
+                          checked={!!customFieldsData[field.name]}
+                          onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.checked })}
+                          className="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">ใช่ / ตกลง</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <input
+                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                      required={field.required}
+                      value={customFieldsData[field.name] || ''}
+                      onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                    />
+                  )}
+                </div>
+              ))}
+              
+
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
@@ -714,12 +574,72 @@ export default function UploadPage() {
                   required
                 >
                   <option value="" disabled>-- เลือกแฟ้ม --</option>
-                  {sortedFolders.map((f: any) => (
-                    <option key={f.id} value={f.id}>
-                      {f.displayName}
-                    </option>
-                  ))}
+                  {Object.entries(groupedFolders)
+                    .sort(([a], [b]) => a.localeCompare(b, 'th'))
+                    .map(([dept, deptFolders]) => (
+                      <optgroup key={dept} label={`แผนก: ${dept}`}>
+                        {(deptFolders as any[]).map((f: any) => (
+                          <option key={f.id} value={f.id}>
+                            {f.displayName}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                 </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
+                  สิทธิ์การมองเห็น (Visibility)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                  <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-colors ${visibility === 'PRIVATE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
+                    <input type="radio" name="visibility" value="PRIVATE" checked={visibility === 'PRIVATE'} onChange={() => setVisibility('PRIVATE')} className="hidden" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm">ส่วนตัวแผนก (Private)</span>
+                      <span className="text-xs opacity-70">เห็นได้เฉพาะคนในแผนก</span>
+                    </div>
+                  </label>
+                  <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-colors ${visibility === 'PUBLIC' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
+                    <input type="radio" name="visibility" value="PUBLIC" checked={visibility === 'PUBLIC'} onChange={() => setVisibility('PUBLIC')} className="hidden" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm">สาธารณะ (Public)</span>
+                      <span className="text-xs opacity-70">ทุกคนในบริษัทเห็นได้</span>
+                    </div>
+                  </label>
+                  <label className={`flex items-center p-3 border rounded-xl cursor-pointer transition-colors ${visibility === 'CUSTOM' ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
+                    <input type="radio" name="visibility" value="CUSTOM" checked={visibility === 'CUSTOM'} onChange={() => setVisibility('CUSTOM')} className="hidden" />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm">แชร์แผนกอื่น (Custom)</span>
+                      <span className="text-xs opacity-70">เลือกแผนกที่จะให้เห็นได้</span>
+                    </div>
+                  </label>
+                </div>
+                
+                {visibility === 'CUSTOM' && (
+                  <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800/50 mt-2">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">เลือกแผนกที่คุณต้องการแชร์ไฟล์นี้ให้เห็น:</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {allDepartments.map(dept => (
+                        <label key={dept.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={sharedDepartments.includes(dept.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSharedDepartments([...sharedDepartments, dept.id]);
+                              } else {
+                                setSharedDepartments(sharedDepartments.filter(id => id !== dept.id));
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 rounded border-slate-300"
+                          />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">{dept.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -750,13 +670,13 @@ export default function UploadPage() {
                   ไปที่หน้าแฟ้มจัดเก็บทันทีเมื่ออัปโหลดเสร็จ
                 </span>
               </label>
-              
+
               <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
-                  <button 
-                    type="button"
-                    onClick={() => setShowScannerModal(true)}
-                    className="px-6 py-2.5 text-slate-600 dark:text-white font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 rounded-xl transition"
-                  >
+                <button
+                  type="button"
+                  onClick={() => setShowScannerModal(true)}
+                  className="px-6 py-2.5 text-slate-600 dark:text-white font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 rounded-xl transition"
+                >
                   ยกเลิก
                 </button>
                 <button
@@ -781,9 +701,17 @@ export default function UploadPage() {
           </form>
         </div>
       </div>
-      
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title="ยืนยันการอัปโหลด"
+        message={`คุณต้องการอัปโหลดเอกสารทั้งหมด ${files.length} รายการ ใช่หรือไม่?`}
+        onConfirm={executeUpload}
+        onCancel={() => setConfirmModal({ isOpen: false })}
+      />
+
       {isScanning && (
-        <CameraCapture 
+        <CameraCapture
           onCapture={(scannedFile) => {
             setScannedFilePath(null);
             validateAndSetFile(scannedFile);
@@ -793,7 +721,7 @@ export default function UploadPage() {
         />
       )}
 
-      <ScannerSelectionModal 
+      <ScannerSelectionModal
         isOpen={showScannerModal}
         onClose={() => setShowScannerModal(false)}
         onFileSelect={handleScannerFileSelect}

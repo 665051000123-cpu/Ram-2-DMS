@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -52,15 +55,31 @@ export default async function DocumentsPage() {
       uploader: { select: { name: true } },
       folder: { select: { name: true, id: true } },
       department: { select: { name: true, id: true } },
+      documentTypeRef: true,
       favoritedBy: { where: { userId: session.user.id } },
       versions: { orderBy: { version: "desc" } },
     },
     orderBy: { createdAt: "desc" },
   });
 
-  const departments = await prisma.department.findMany({
+  let departments = await prisma.department.findMany({
     orderBy: { name: "asc" }
   });
+
+  if (session.user.role !== "SUPER_ADMIN") {
+    const accessibleDeptIds = new Set<string>();
+    if (session.user.departmentId) {
+      accessibleDeptIds.add(session.user.departmentId);
+    }
+    accessibleFolders.forEach(f => {
+      if (f.departmentId) {
+        accessibleDeptIds.add(f.departmentId);
+      }
+    });
+    
+    // Filter departments to only those the user has access to
+    departments = departments.filter(dept => accessibleDeptIds.has(dept.id));
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">

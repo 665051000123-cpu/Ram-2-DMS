@@ -1,17 +1,15 @@
 "use client";
 
+"use client";
 import { useState, useMemo } from "react";
 import {
   UserPlus,
   Trash2,
   Mail,
-  Shield,
   User as UserIcon,
   Search,
   Filter,
-  Power,
 } from "lucide-react";
-import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
@@ -65,10 +63,12 @@ export default function UserList({
     isOpen: boolean;
     userId: string;
     userName: string;
+    action?: "DELETE" | "ADD" | "EDIT";
   }>({
     isOpen: false,
     userId: "",
     userName: "",
+    action: "DELETE",
   });
 
   const openAddModal = () => {
@@ -91,12 +91,23 @@ export default function UserList({
     setShowAddModal(true);
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
+  const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!departmentId) {
       toast.error("กรุณาเลือกแผนก");
       return;
     }
+    setConfirmModal({
+      isOpen: true,
+      userId: editingUserId || "new",
+      userName: name,
+      action: editingUserId ? "EDIT" : "ADD",
+    });
+  };
+
+  const executeAddUser = async () => {
+    const { action } = confirmModal;
+    setConfirmModal({ isOpen: false, userId: "", userName: "", action: "ADD" });
     setLoading(true);
 
     try {
@@ -170,7 +181,7 @@ export default function UserList({
   };
 
   const handleDeleteClick = (id: string, name: string) => {
-    setConfirmModal({ isOpen: true, userId: id, userName: name });
+    setConfirmModal({ isOpen: true, userId: id, userName: name, action: "DELETE" });
   };
 
   const handleConfirmDelete = async () => {
@@ -187,7 +198,7 @@ export default function UserList({
       setUsers(users.filter((u) => u.id !== id));
       toast.success("ลบผู้ใช้งานสำเร็จ");
       router.refresh();
-    } catch (error) {
+    } catch {
       toast.error("ไม่สามารถลบผู้ใช้งานได้");
     }
   };
@@ -554,11 +565,22 @@ export default function UserList({
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
-        title="ยืนยันการลบผู้ใช้งาน"
-        message={`คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งาน "${confirmModal.userName}" ออกจากระบบ? การกระทำนี้ไม่สามารถย้อนกลับได้`}
-        onConfirm={handleConfirmDelete}
+        title={
+          confirmModal.action === "DELETE" ? "ยืนยันการลบผู้ใช้งาน" :
+          confirmModal.action === "ADD" ? "ยืนยันการเพิ่มผู้ใช้งาน" : "ยืนยันการแก้ไขข้อมูลผู้ใช้งาน"
+        }
+        message={
+          confirmModal.action === "DELETE" ? `คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งาน "${confirmModal.userName}"? (จะลบข้อมูลที่เกี่ยวข้องทั้งหมด)` :
+          confirmModal.action === "ADD" ? `คุณต้องการเพิ่มผู้ใช้งาน "${confirmModal.userName}" ใช่หรือไม่?` :
+          `คุณต้องการบันทึกการแก้ไขข้อมูลผู้ใช้งาน "${confirmModal.userName}" ใช่หรือไม่?`
+        }
+        requirePassword={confirmModal.action === "DELETE" || confirmModal.action === "EDIT"}
+        onConfirm={() => {
+          if (confirmModal.action === "DELETE") handleConfirmDelete();
+          else executeAddUser();
+        }}
         onCancel={() =>
-          setConfirmModal({ isOpen: false, userId: "", userName: "" })
+          setConfirmModal({ isOpen: false, userId: "", userName: "", action: "DELETE" })
         }
       />
     </div>

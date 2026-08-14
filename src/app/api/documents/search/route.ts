@@ -19,35 +19,23 @@ export async function GET(req: Request) {
     const dateFrom = searchParams.get("dateFrom");
     const dateTo = searchParams.get("dateTo");
 
-    let accessibleFolders;
-    if (session.user.role === "SUPER_ADMIN") {
-      accessibleFolders = await prisma.folder.findMany({ select: { id: true } });
-    } else {
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { departmentId: true }
-      });
-      accessibleFolders = await prisma.folder.findMany({
-        where: {
-          OR: [
-            { departmentId: user?.departmentId },
-            { departmentId: null }
-          ]
-        },
-        select: { id: true }
-      });
-    }
-
-    const folderIds = accessibleFolders.map(f => f.id);
-
     // Build the query
     let whereClause: any = {
       isDeleted: false,
-      OR: [
-        { folderId: { in: folderIds } },
-        { uploaderId: session.user.id }
-      ]
     };
+
+    if (session.user.role !== "SUPER_ADMIN") {
+      const userDeptId = session.user.departmentId;
+      whereClause.OR = [
+        { uploaderId: session.user.id },
+        { departmentId: userDeptId },
+        { visibility: "PUBLIC" },
+        {
+          visibility: "CUSTOM",
+          sharedDepartments: { some: { id: userDeptId } }
+        }
+      ];
+    }
 
     if (q) {
       // Use AND for text search to not override the access control OR
@@ -59,7 +47,8 @@ export async function GET(req: Request) {
               { title: { contains: q } },
               { description: { contains: q } },
               { tags: { contains: q } },
-              { extractedText: { contains: q } }
+              { extractedText: { contains: q } },
+              { customFields: { string_contains: q } }
             ]
           }
         ]
@@ -90,10 +79,19 @@ export async function GET(req: Request) {
 
     const documents = await prisma.document.findMany({
       where: whereClause,
-      select: { id: true },
+      select: { 
+        id: true,
+        title: true,
+        documentCode: true,
+        documentType: true,
+        department: { select: { id: true, name: true } }
+      },
     });
 
-    return NextResponse.json({ documentIds: documents.map((d) => d.id) });
+    return NextResponse.json({ 
+      documentIds: documents.map((d) => d.id),
+      documents: documents
+    });
   } catch (error) {
     console.error("Deep Search Error:", error);
     return NextResponse.json(

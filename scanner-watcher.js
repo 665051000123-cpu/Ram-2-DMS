@@ -145,7 +145,6 @@ watcher.on('add', async (filePath) => {
         currentVersion: 1,
         departmentId: targetDept ? targetDept.id : admin.departmentId,
         uploaderId: targetUser.id,
-        visibility: targetVisibility,
         versions: {
           create: {
             version: 1,

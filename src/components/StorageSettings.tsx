@@ -10,6 +10,8 @@ export default function StorageSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState("10");
+  const [allowedFileTypes, setAllowedFileTypes] = useState("pdf, jpg, png, jpeg, docx, xlsx");
 
   // S3 Cloud Backup State
   const [s3Enabled, setS3Enabled] = useState(false);
@@ -18,10 +20,6 @@ export default function StorageSettings() {
   const [s3Region, setS3Region] = useState("auto");
   const [s3AccessKey, setS3AccessKey] = useState("");
   const [s3SecretKey, setS3SecretKey] = useState("");
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   const fetchSettings = async () => {
     try {
@@ -37,6 +35,8 @@ export default function StorageSettings() {
         setS3Region(data.s3Region || "auto");
         setS3AccessKey(data.s3AccessKey || "");
         setS3SecretKey(data.s3SecretKey || "");
+        setMaxFileSizeMB(data.MAX_FILE_SIZE_MB || "10");
+        setAllowedFileTypes(data.ALLOWED_FILE_TYPES || "pdf, jpg, png, jpeg, docx, xlsx");
       }
     } catch (error) {
       console.error("Failed to fetch settings:", error);
@@ -44,6 +44,10 @@ export default function StorageSettings() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -62,7 +66,11 @@ export default function StorageSettings() {
           s3Bucket,
           s3Region,
           s3AccessKey,
-          s3SecretKey
+          s3SecretKey,
+          settings: { 
+            MAX_FILE_SIZE_MB: maxFileSizeMB,
+            ALLOWED_FILE_TYPES: allowedFileTypes
+          }
         }),
       });
 
@@ -148,6 +156,67 @@ export default function StorageSettings() {
               {message.text}
             </p>
           )}
+        </div>
+
+        <hr className="border-slate-200 dark:border-slate-700 my-6" />
+
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">ขนาดไฟล์อัปโหลด</h3>
+          <p className="text-sm text-slate-500 dark:text-white mb-4">
+            จำกัดขนาดไฟล์สูงสุดที่อนุญาตให้อัปโหลดเข้าสู่ระบบ
+          </p>
+          
+          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
+            ขนาดไฟล์สูงสุด (MB)
+          </label>
+          <div className="flex gap-3">
+            <input
+              type="number"
+              min="1"
+              max="2000"
+              value={maxFileSizeMB}
+              onChange={(e) => setMaxFileSizeMB(e.target.value)}
+              className="flex-1 max-w-[200px] rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+          </div>
+        </div>
+
+        <hr className="border-slate-200 dark:border-slate-700 my-6" />
+
+        <div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">ประเภทไฟล์ที่อนุญาต</h3>
+          <p className="text-sm text-slate-500 dark:text-white mb-4">
+            กำหนดนามสกุลไฟล์ที่อนุญาตให้อัปโหลดเข้าสู่ระบบ (คั่นด้วยลูกน้ำ ,)
+          </p>
+          
+          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
+            นามสกุลไฟล์ (เช่น pdf, jpg, png, docx)
+          </label>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={allowedFileTypes}
+              onChange={(e) => setAllowedFileTypes(e.target.value)}
+              className="flex-1 max-w-[400px] rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="pdf, jpg, png, docx, xlsx"
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save size={16} />
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+          </div>
         </div>
 
         <hr className="border-slate-200 dark:border-slate-700 my-6" />

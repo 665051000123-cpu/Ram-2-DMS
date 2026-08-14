@@ -10,17 +10,19 @@ export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const isSuperAdmin = session.user.role === "SUPER_ADMIN";
 
     const departments = await prisma.department.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
+      include: isSuperAdmin ? {
         _count: {
           select: { users: true, documents: true },
         },
-      },
+      } : undefined,
     });
 
     return NextResponse.json(departments);

@@ -37,10 +37,12 @@ export default function DepartmentSettings({
     isOpen: boolean;
     deptId: string;
     deptName: string;
+    action?: "DELETE" | "ADD" | "EDIT";
   }>({
     isOpen: false,
     deptId: "",
     deptName: "",
+    action: "DELETE",
   });
 
   const filteredDepartments = useMemo(() => {
@@ -49,10 +51,14 @@ export default function DepartmentSettings({
     );
   }, [departments, searchTerm]);
 
-  const handleAddDepartment = async (e: React.FormEvent) => {
+  const handleAddDepartment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDeptName.trim()) return;
+    setConfirmModal({ isOpen: true, deptId: "new", deptName: newDeptName.trim(), action: "ADD" });
+  };
 
+  const executeAddDepartment = async () => {
+    setConfirmModal({ isOpen: false, deptId: "", deptName: "", action: "ADD" });
     setLoading(true);
 
     try {
@@ -88,7 +94,7 @@ export default function DepartmentSettings({
   };
 
   const handleDeleteClick = (deptId: string, deptName: string) => {
-    setConfirmModal({ isOpen: true, deptId, deptName });
+    setConfirmModal({ isOpen: true, deptId, deptName, action: "DELETE" });
   };
 
   const handleConfirmDelete = async () => {
@@ -123,17 +129,23 @@ export default function DepartmentSettings({
     setEditName("");
   };
 
-  const handleSaveEdit = async (deptId: string) => {
+  const handleSaveEdit = (deptId: string) => {
     if (!editName.trim()) {
-      toast.error("ชื่อแผนกไม่สามารถเว้นว่างได้");
+      toast.error("ชื่อแผนกต้องไม่เป็นค่าว่าง");
       return;
     }
+    setConfirmModal({ isOpen: true, deptId, deptName: editName.trim(), action: "EDIT" });
+  };
+
+  const executeEditDepartment = async () => {
+    const { deptId, deptName } = confirmModal;
+    setConfirmModal({ isOpen: false, deptId: "", deptName: "", action: "EDIT" });
 
     try {
       const res = await fetch(`/api/departments/${deptId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editName.trim() }),
+        body: JSON.stringify({ name: deptName }),
       });
 
       if (!res.ok) {
@@ -142,7 +154,7 @@ export default function DepartmentSettings({
       }
 
       setDepartments(
-        departments.map((d) => (d.id === deptId ? { ...d, name: editName.trim() } : d))
+        departments.map((d) => (d.id === deptId ? { ...d, name: deptName } : d))
       );
       setEditingId(null);
       toast.success("แก้ไขชื่อแผนกสำเร็จ");
@@ -340,11 +352,23 @@ export default function DepartmentSettings({
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
-        title="ยืนยันการลบแผนก"
-        message={`คุณแน่ใจหรือไม่ว่าต้องการลบแผนก "${confirmModal.deptName}"? (จะไม่สามารถลบได้หากยังมีผู้ใช้งานหรือเอกสารที่เชื่อมโยงอยู่)`}
-        onConfirm={handleConfirmDelete}
+        title={
+          confirmModal.action === "DELETE" ? "ยืนยันการลบแผนก" :
+          confirmModal.action === "ADD" ? "ยืนยันการสร้างแผนก" : "ยืนยันการแก้ไขข้อมูลแผนก"
+        }
+        message={
+          confirmModal.action === "DELETE" ? `คุณแน่ใจหรือไม่ว่าต้องการลบแผนก "${confirmModal.deptName}"? (ข้อมูลที่เกี่ยวข้องอาจถูกลบตาม)` :
+          confirmModal.action === "ADD" ? `คุณต้องการสร้างแผนก "${confirmModal.deptName}" ใช่หรือไม่?` :
+          `คุณต้องการบันทึกการแก้ไขแผนก "${confirmModal.deptName}" ใช่หรือไม่?`
+        }
+        requirePassword={confirmModal.action === "DELETE" || confirmModal.action === "EDIT"}
+        onConfirm={() => {
+          if (confirmModal.action === "DELETE") handleConfirmDelete();
+          else if (confirmModal.action === "ADD") executeAddDepartment();
+          else if (confirmModal.action === "EDIT") executeEditDepartment();
+        }}
         onCancel={() =>
-          setConfirmModal({ isOpen: false, deptId: "", deptName: "" })
+          setConfirmModal({ isOpen: false, deptId: "", deptName: "", action: "DELETE" })
         }
       />
     </div>

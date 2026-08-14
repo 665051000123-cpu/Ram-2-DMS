@@ -38,11 +38,34 @@ export async function POST(req: Request) {
     const description = formData.get("description") as string;
     const tags = formData.get("tags") as string;
     const documentType = formData.get("documentType") as string;
+    const documentTypeId = formData.get("documentTypeId") as string;
+    const customFieldsRaw = formData.get("customFields") as string;
     const folderId = formData.get("folderId") as string;
     const sharedUsers = formData.get("sharedUsers") as string; // JSON array of user IDs
+    
+    const visibilityRaw = formData.get("visibility") as string;
+    const visibility = ["PRIVATE", "PUBLIC", "CUSTOM"].includes(visibilityRaw) ? visibilityRaw : "PRIVATE";
+    
+    const sharedDepartmentsRaw = formData.get("sharedDepartments") as string;
+    let sharedDepartmentsList: string[] = [];
+    if (visibility === "CUSTOM" && sharedDepartmentsRaw) {
+      try {
+        sharedDepartmentsList = JSON.parse(sharedDepartmentsRaw);
+      } catch (e) {}
+    }
+    
     let documentCode = formData.get("documentCode") as string;
     const retentionPeriodStr = formData.get("retentionPeriod") as string;
     const scannedFilePath = formData.get("scannedFilePath") as string | null;
+
+    let customFields = {};
+    if (customFieldsRaw) {
+      try {
+        customFields = JSON.parse(customFieldsRaw);
+      } catch (e) {
+        console.error("Failed to parse customFields", e);
+      }
+    }
 
     if (!file || !title) {
       return NextResponse.json(
@@ -55,13 +78,38 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Feature Toggles Check
+    // Feature Toggles & Settings Check
     const settings = await prisma.systemSetting.findMany({
-      where: { key: { in: ["STRICT_FILE_VALIDATION", "ENABLE_AUTO_OCR"] } }
+      where: { key: { in: ["STRICT_FILE_VALIDATION", "ENABLE_AUTO_OCR", "MAX_FILE_SIZE_MB", "ALLOWED_FILE_TYPES"] } }
     });
-    const settingsMap = settings.reduce((acc: any, s) => { acc[s.key] = s.value === "true"; return acc; }, {});
+    const settingsMap = settings.reduce((acc: any, s) => { 
+      acc[s.key] = (s.key === "MAX_FILE_SIZE_MB" || s.key === "ALLOWED_FILE_TYPES") ? s.value : (s.value === "true"); 
+      return acc; 
+    }, {});
+    
     const isStrictValidation = settingsMap["STRICT_FILE_VALIDATION"] || false;
     const isAutoOcr = settingsMap["ENABLE_AUTO_OCR"] || false;
+    const maxFileSizeMB = parseInt(settingsMap["MAX_FILE_SIZE_MB"] || "10", 10);
+    const allowedFileTypesStr = settingsMap["ALLOWED_FILE_TYPES"] || "pdf, jpg, png, jpeg, docx, xlsx";
+    
+    const allowedExtensions = allowedFileTypesStr.split(",").map((t: string) => t.trim().toLowerCase());
+    const fileExtension = file.name.split(".").pop()?.toLowerCase() || "";
+
+    // Validate File Extension
+    if (!allowedExtensions.includes(fileExtension)) {
+      return NextResponse.json(
+        { error: `File type .${fileExtension} is not allowed. Allowed types: ${allowedFileTypesStr}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate File Size
+    if (file.size > maxFileSizeMB * 1024 * 1024) {
+      return NextResponse.json(
+        { error: `File size exceeds the maximum limit of ${maxFileSizeMB}MB` },
+        { status: 400 }
+      );
+    }
 
     // Strict File Validation (Magic Bytes)
     if (isStrictValidation) {
@@ -87,7 +135,6 @@ export async function POST(req: Request) {
     }
 
     // Create unique filename
-    const fileExtension = file.name.split(".").pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
 
     // Create Department Folder Name (Sanitized)
@@ -150,11 +197,17 @@ export async function POST(req: Request) {
         storagePath: storagePath, // Save the physical location
         tags: tags || "",
         documentType: documentType || null,
+        documentTypeId: documentTypeId || null,
+        customFields: customFields,
         documentCode,
         retentionPeriod,
+        visibility: visibility as any,
+        sharedDepartments: visibility === "CUSTOM" && sharedDepartmentsList.length > 0
+          ? { connect: sharedDepartmentsList.map(id => ({ id })) }
+          : undefined,
         currentVersion: 1,
         departmentId: session.user.departmentId,
-        folderId,
+        folderId: folderId || null,
         uploaderId: session.user.id,
         versions: {
           create: {

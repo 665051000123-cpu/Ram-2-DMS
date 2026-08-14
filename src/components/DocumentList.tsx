@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search,
   FileText,
@@ -25,11 +25,13 @@ import {
   Link,
   Unlink,
   MessageSquare,
+  Inbox,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
+import ScannerSelectionModal from "./ScannerSelectionModal";
 import FolderAccessModal from "./FolderAccessModal";
 import DocumentLinkModal from "./DocumentLinkModal";
 import DocumentCommentModal from "./DocumentCommentModal";
@@ -49,6 +51,9 @@ type Document = {
   department?: { id: string, name: string };
   currentVersion?: number;
   documentType?: string | null;
+  documentTypeId?: string | null;
+  customFields?: any;
+  documentTypeRef?: { id: string; name: string; schema: any[] } | null;
   fileSize?: number;
   favoritedBy?: { userId: string }[];
   versions?: {
@@ -95,6 +100,14 @@ export default function DocumentList({
   const router = useRouter();
   const { permissions } = usePermissions(currentUserRole);
   const [documents, setDocuments] = useState<Document[]>(initialDocuments);
+
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [showEditScannerModal, setShowEditScannerModal] = useState(false);
+  const handleEditScannerFileSelect = (newFile: File) => {
+    setEditModal(prev => ({ ...prev, file: newFile }));
+    setShowEditScannerModal(false);
+  };
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [filterFolder, setFilterFolder] = useState("ALL");
@@ -249,22 +262,33 @@ export default function DocumentList({
         }
       }
 
-      const res = await fetch("/api/folders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name: newFolderName.trim(),
-          departmentId,
-          parentId
-        }),
-      });
+      let res;
+      if (currentPath.length === 0) {
+        res = await fetch("/api/departments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            name: newFolderName.trim()
+          }),
+        });
+      } else {
+        res = await fetch("/api/folders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            name: newFolderName.trim(),
+            departmentId,
+            parentId
+          }),
+        });
+      }
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to create folder");
+        throw new Error(errorData.error || "Failed to create item");
       }
 
-      toast.success("สร้างหมวดหมู่สำเร็จ");
+      toast.success(currentPath.length === 0 ? "เพิ่มแผนกใหม่สำเร็จ" : "สร้างแฟ้มย่อยสำเร็จ");
       setShowCreateFolderModal(false);
       setNewFolderName("");
       window.location.reload();
@@ -547,7 +571,7 @@ export default function DocumentList({
                 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 dark:hover:bg-blue-500/30
               `}
             >
-              <Folder size={16} /> {currentPath.length === 0 ? "สร้างหมวดหมู่" : "สร้างแฟ้มย่อย"}
+              {currentPath.length === 0 ? <Building2 size={16} /> : <Folder size={16} />} {currentPath.length === 0 ? "เพิ่มแผนกใหม่" : "สร้างแฟ้มย่อย"}
             </button>
           )}
         </div>
@@ -874,10 +898,10 @@ export default function DocumentList({
                                   <td className="py-4 px-6">
                                     <div className="flex flex-col gap-1.5">
                                       <div className="flex flex-wrap gap-1">
-                                        {doc.documentType && (
+                                        {(doc.documentTypeRef?.name || doc.documentType) && (
                                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white border border-slate-200 dark:border-slate-600">
                                             <Tag size={12} />
-                                            {doc.documentType}
+                                            {doc.documentTypeRef?.name || doc.documentType}
                                           </span>
                                         )}
                                         {doc.tags
@@ -885,7 +909,8 @@ export default function DocumentList({
                                           .filter(
                                             (t) =>
                                               t.trim() !== "" &&
-                                              t.trim() !== doc.documentType,
+                                              t.trim() !== doc.documentType &&
+                                              t.trim() !== doc.documentTypeRef?.name,
                                           )
                                           .map((tag, idx) => (
                                             <span
@@ -896,12 +921,26 @@ export default function DocumentList({
                                               {tag.trim()}
                                             </span>
                                           ))}
-                                        {!doc.tags && !doc.documentType && (
+                                        {!doc.tags && !doc.documentType && !doc.documentTypeRef && (
                                           <span className="text-sm text-slate-400 dark:text-white">
                                             -
                                           </span>
                                         )}
                                       </div>
+                                      {doc.customFields && Object.keys(doc.customFields).length > 0 && (
+                                        <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100 dark:border-slate-700/50 pt-1">
+                                          {Object.entries(doc.customFields).map(([key, value]) => {
+                                            const fieldSchema = doc.documentTypeRef?.schema?.find((s: any) => s.name === key);
+                                            const label = fieldSchema?.label || key;
+                                            return (
+                                              <div key={key} className="text-[11px] flex gap-1 items-start">
+                                                <span className="font-medium text-slate-500 dark:text-slate-400 min-w-max">{label}:</span>
+                                                <span className="text-slate-700 dark:text-slate-200 break-words">{String(value)}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
                                   </td>
                                   {currentUserRole === "SUPER_ADMIN" && (
@@ -1185,18 +1224,42 @@ export default function DocumentList({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1">
+                <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
                   อัปโหลดไฟล์เวอร์ชันใหม่ (ถ้ามี)
                 </label>
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => editFileInputRef.current?.click()}
+                    className="w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white font-medium rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-200"
+                  >
+                    ค้นหาไฟล์ในเครื่อง
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowEditScannerModal(true);
+                    }}
+                    className="w-full sm:w-auto px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium rounded-lg shadow-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-2"
+                  >
+                    <Inbox size={16} />
+                    ดึงจากเครื่องสแกน
+                  </button>
+                </div>
+                {editModal.file && (
+                  <div className="mt-3 text-sm text-blue-600 dark:text-blue-400 font-medium bg-blue-50/50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-100 dark:border-blue-800">
+                    ✅ เลือกไฟล์แล้ว: {editModal.file.name}
+                  </div>
+                )}
                 <input
                   type="file"
+                  ref={editFileInputRef}
+                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) =>
-                    setEditModal({
-                      ...editModal,
-                      file: e.target.files?.[0] || null,
-                    })
+                    setEditModal({ ...editModal, file: e.target.files?.[0] || null })
                   }
-                  className="w-full text-sm text-slate-500 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:bg-blue-500/20 file:text-blue-700 dark:text-blue-300 hover:file:bg-blue-100 dark:bg-blue-500/20 transition"
+                  className="hidden"
                 />
               </div>
 
@@ -1443,6 +1506,12 @@ export default function DocumentList({
            onClose={() => setCommentModal({ isOpen: false, doc: null })}
         />
       )}
+
+      <ScannerSelectionModal
+        isOpen={showEditScannerModal}
+        onClose={() => setShowEditScannerModal(false)}
+        onFileSelect={handleEditScannerFileSelect}
+      />
     </div>
   );
 }
