@@ -109,8 +109,13 @@ export default function DocumentList({
   };
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterDate, setFilterDate] = useState("");
-  const [filterFolder, setFilterFolder] = useState("ALL");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterDepartmentId, setFilterDepartmentId] = useState("ALL");
+  const [filterUploaderName, setFilterUploaderName] = useState("ALL");
+  const [filterCustomFields, setFilterCustomFields] = useState<Record<string, string>>({});
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
   const [filterType, setFilterType] = useState("ALL");
 
   const selectedDocType = useMemo(() => {
@@ -118,6 +123,11 @@ export default function DocumentList({
     return documentTypes.find(t => t.id === filterType);
   }, [filterType, documentTypes]);
   const hasCustomSchema = Boolean(selectedDocType && Array.isArray(selectedDocType.schema) && selectedDocType.schema.length > 0);
+
+  const uniqueUploaders = useMemo(() => {
+    const uploaders = documents.map(d => d.uploader?.name).filter(Boolean);
+    return Array.from(new Set(uploaders)).sort();
+  }, [documents]);
 
   const [deepSearchDocs, setDeepSearchDocs] = useState<string[] | null>(null);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
@@ -209,11 +219,20 @@ export default function DocumentList({
           doc.tags.toLowerCase().includes(searchLower);
       }
 
-      // 2. Date Filter
+      // 2. Date Range Filter
       let matchesDate = true;
-      if (filterDate) {
-        const docDate = format(new Date(doc.createdAt), "yyyy-MM-dd");
-        matchesDate = docDate === filterDate;
+      if (filterStartDate || filterEndDate) {
+        const docDate = new Date(doc.createdAt);
+        docDate.setHours(0, 0, 0, 0); // normalize time
+
+        let start = filterStartDate ? new Date(filterStartDate) : null;
+        if (start) start.setHours(0, 0, 0, 0);
+
+        let end = filterEndDate ? new Date(filterEndDate) : null;
+        if (end) end.setHours(23, 59, 59, 999);
+
+        if (start && docDate < start) matchesDate = false;
+        if (end && docDate > end) matchesDate = false;
       }
 
       // 3. Type Filter
@@ -222,17 +241,49 @@ export default function DocumentList({
         matchesType = doc.documentTypeId === filterType || doc.documentType === filterType;
       }
 
+      // 4. Department Filter
+      let matchesDept = true;
+      if (filterDepartmentId !== "ALL") {
+        matchesDept = doc.departmentId === filterDepartmentId;
+      }
+
+      // 5. Uploader Filter
+      let matchesUploader = true;
+      if (filterUploaderName !== "ALL") {
+        matchesUploader = doc.uploader?.name === filterUploaderName;
+      }
+
+      // 6. Custom Fields Filter
+      let matchesCustom = true;
+      if (filterType !== "ALL" && Object.keys(filterCustomFields).length > 0) {
+        for (const [key, value] of Object.entries(filterCustomFields)) {
+          if (value.trim() === "") continue;
+          const docVal = String(doc.customFields?.[key] || "").toLowerCase();
+          if (!docVal.includes(value.toLowerCase())) {
+            matchesCustom = false;
+            break;
+          }
+        }
+      }
+
       return (
         matchesSearch &&
         matchesDate &&
-        matchesType
+        matchesType &&
+        matchesDept &&
+        matchesUploader &&
+        matchesCustom
       );
     });
   }, [
     documents,
     searchTerm,
-    filterDate,
+    filterStartDate,
+    filterEndDate,
     filterType,
+    filterDepartmentId,
+    filterUploaderName,
+    filterCustomFields,
     deepSearchDocs,
   ]);
 
@@ -422,14 +473,17 @@ export default function DocumentList({
       {/* 2. เนื้อหา (Document List) */}
       <div className="flex flex-col">
         {/* Filters Toolbar */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col md:flex-row gap-4 items-center">
-
-
-            {/* Document Type Filter */}
-            <div className="md:w-48 relative">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 transition-colors flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 items-center w-full md:w-auto">
+              {/* Document Type Filter */}
+              <div className="w-full md:w-48 relative">
                 <select
                   value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
+                  onChange={(e) => {
+                    setFilterType(e.target.value);
+                    setFilterCustomFields({}); // Reset custom fields when type changes
+                  }}
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                 >
                   <option value="ALL">ทุกประเภท</option>
@@ -443,36 +497,157 @@ export default function DocumentList({
                   <FileText className="h-4 w-4 text-slate-400 dark:text-white" />
                 </div>
               </div>
+            </div>
 
-            {/* Date Filter */}
-            <div className="md:w-48 relative group">
-                <input
-                  type="text"
-                  readOnly
-                  value={filterDate ? format(new Date(filterDate), "dd/MM/yyyy") : ""}
-                  placeholder="วว/ดด/ปปปป"
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm cursor-pointer"
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Calendar className="h-4 w-4 text-slate-400 dark:text-white" />
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              <Filter size={16} />
+              ค้นหาขั้นสูง
+              <ChevronDown size={16} className={`transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+
+          {/* Advanced Filters */}
+          {showAdvancedFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-slate-100 dark:border-slate-700/50 animate-in fade-in slide-in-from-top-4 duration-200">
+              
+              {/* Department */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">แผนก</label>
+                <div className="relative">
+                  <select
+                    value={filterDepartmentId}
+                    onChange={(e) => setFilterDepartmentId(e.target.value)}
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
+                  >
+                    <option value="ALL">ทุกแผนก</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Building2 className="h-4 w-4 text-slate-400 dark:text-white" />
+                  </div>
                 </div>
-                <input
-                  type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  onClick={(e) => {
-                    try {
-                      if ('showPicker' in HTMLInputElement.prototype) {
-                        e.currentTarget.showPicker();
-                      }
-                    } catch (err) {}
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
               </div>
 
+              {/* Uploader */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ผู้อัปโหลด</label>
+                <div className="relative">
+                  <select
+                    value={filterUploaderName}
+                    onChange={(e) => setFilterUploaderName(e.target.value)}
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
+                  >
+                    <option value="ALL">ทุกคน</option>
+                    {uniqueUploaders.map((uploader) => (
+                      <option key={uploader} value={uploader}>{uploader}</option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Inbox className="h-4 w-4 text-slate-400 dark:text-white" />
+                  </div>
+                </div>
+              </div>
 
-          </div>
+              {/* Start Date */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ตั้งแต่วันที่</label>
+                <div className="relative group">
+                  <input
+                    type="text"
+                    readOnly
+                    value={filterStartDate ? format(new Date(filterStartDate), "dd/MM/yyyy") : ""}
+                    placeholder="วว/ดด/ปปปป"
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm cursor-pointer"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-slate-400 dark:text-white" />
+                  </div>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) e.currentTarget.showPicker(); } catch (err) {} }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* End Date */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">ถึงวันที่</label>
+                <div className="relative group">
+                  <input
+                    type="text"
+                    readOnly
+                    value={filterEndDate ? format(new Date(filterEndDate), "dd/MM/yyyy") : ""}
+                    placeholder="วว/ดด/ปปปป"
+                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm cursor-pointer"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-slate-400 dark:text-white" />
+                  </div>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    onClick={(e) => { try { if ('showPicker' in HTMLInputElement.prototype) e.currentTarget.showPicker(); } catch (err) {} }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Custom Fields (Dynamic) */}
+              {hasCustomSchema && selectedDocType && selectedDocType.schema.map((field: any) => (
+                <div key={field.name} className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500 dark:text-slate-400">{field.label}</label>
+                  <div className="relative">
+                    {field.type === "select" ? (
+                      <select
+                        value={filterCustomFields[field.name] || ""}
+                        onChange={(e) => setFilterCustomFields(prev => ({ ...prev, [field.name]: e.target.value }))}
+                        className="block w-full pl-3 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
+                      >
+                        <option value="">ทั้งหมด</option>
+                        {field.options?.map((opt: string) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder={`กรอง ${field.label}...`}
+                        value={filterCustomFields[field.name] || ""}
+                        onChange={(e) => setFilterCustomFields(prev => ({ ...prev, [field.name]: e.target.value }))}
+                        className="block w-full pl-3 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm"
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Clear Filters Button */}
+              <div className="col-span-full flex justify-end mt-2">
+                <button
+                  onClick={() => {
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                    setFilterDepartmentId("ALL");
+                    setFilterUploaderName("ALL");
+                    setFilterCustomFields({});
+                  }}
+                  className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex items-center gap-1.5"
+                >
+                  <XCircle size={16} /> ล้างตัวกรองเพิ่มเติม
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
           {/* 2. ตารางแสดงเอกสาร */}
           <div className="overflow-x-auto">
