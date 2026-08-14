@@ -39,15 +39,22 @@ export default async function DocumentsPage() {
     });
   }
 
-  const folderIds = accessibleFolders.map(f => f.id);
-
-  const whereClause: any = {
+  let whereClause: any = {
     isDeleted: false,
-    OR: [
-      { folderId: { in: folderIds } },
-      { uploaderId: session.user.id } // Always see own docs
-    ]
   };
+
+  if (session.user.role !== "SUPER_ADMIN") {
+    const userDeptId = session.user.departmentId;
+    whereClause.OR = [
+      { uploaderId: session.user.id },
+      { departmentId: userDeptId },
+      { visibility: "PUBLIC" },
+      { 
+        visibility: "CUSTOM", 
+        sharedDepartments: { some: { id: userDeptId } } 
+      }
+    ];
+  }
 
   const documents = await prisma.document.findMany({
     where: whereClause,
@@ -71,7 +78,7 @@ export default async function DocumentsPage() {
     if (session.user.departmentId) {
       accessibleDeptIds.add(session.user.departmentId);
     }
-    accessibleFolders.forEach(f => {
+    accessibleFolders.forEach((f: any) => {
       if (f.departmentId) {
         accessibleDeptIds.add(f.departmentId);
       }
@@ -80,6 +87,10 @@ export default async function DocumentsPage() {
     // Filter departments to only those the user has access to
     departments = departments.filter(dept => accessibleDeptIds.has(dept.id));
   }
+
+  const documentTypes = await prisma.documentType.findMany({
+    orderBy: { name: "asc" }
+  });
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -99,6 +110,7 @@ export default async function DocumentsPage() {
         currentUserDepartmentId={session.user.departmentId}
         folders={accessibleFolders}
         departments={departments}
+        documentTypes={documentTypes}
       />
     </div>
   );

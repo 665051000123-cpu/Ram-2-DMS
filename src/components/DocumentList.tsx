@@ -89,6 +89,7 @@ export default function DocumentList({
   currentUserDepartmentId,
   folders = [],
   departments = [],
+  documentTypes = [],
 }: {
   initialDocuments: Document[];
   currentUserId: string;
@@ -96,6 +97,7 @@ export default function DocumentList({
   currentUserDepartmentId?: string | null;
   folders?: { id: string; name: string; parentId: string | null; description: string | null; departmentId: string | null; }[];
   departments?: { id: string; name: string; }[];
+  documentTypes?: { id: string; name: string; schema: any }[];
 }) {
   const router = useRouter();
   const { permissions } = usePermissions(currentUserRole);
@@ -112,6 +114,12 @@ export default function DocumentList({
   const [filterDate, setFilterDate] = useState("");
   const [filterFolder, setFilterFolder] = useState("ALL");
   const [filterType, setFilterType] = useState("ALL");
+
+  const selectedDocType = useMemo(() => {
+    if (filterType === "ALL") return null;
+    return documentTypes.find(t => t.id === filterType);
+  }, [filterType, documentTypes]);
+  const hasCustomSchema = Boolean(selectedDocType && Array.isArray(selectedDocType.schema) && selectedDocType.schema.length > 0);
 
   const [deepSearchDocs, setDeepSearchDocs] = useState<string[] | null>(null);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
@@ -226,20 +234,7 @@ export default function DocumentList({
     folderName: "",
   });
 
-  const [savedDocTypes, setSavedDocTypes] = useState<string[]>([
-    "แบบฟอร์ม",
-    "ประกาศ",
-    "แนวทางปฏิบัติ",
-    "ระเบียบการ",
-    "อื่นๆ",
-  ]);
 
-  useEffect(() => {
-    const loadedDocTypes = localStorage.getItem("dms_saved_doctypes");
-    if (loadedDocTypes) {
-      setSavedDocTypes(JSON.parse(loadedDocTypes));
-    }
-  }, []);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,18 +294,7 @@ export default function DocumentList({
     }
   };
 
-  const handleSaveEditDocType = () => {
-    if (!editModal.documentType.trim()) return;
-    const newType = editModal.documentType.trim();
-    if (!savedDocTypes.includes(newType)) {
-      const updatedTypes = [...savedDocTypes, newType];
-      setSavedDocTypes(updatedTypes);
-      localStorage.setItem("dms_saved_doctypes", JSON.stringify(updatedTypes));
-      toast.success("บันทึกประเภทเอกสารใหม่เรียบร้อยแล้ว");
-    } else {
-      toast.success("มีประเภทเอกสารนี้อยู่แล้ว");
-    }
-  };
+
 
   const folderStats = useMemo(() => {
     const folderMap = new Map<string, { id: string, name: string, count: number }>();
@@ -369,7 +353,7 @@ export default function DocumentList({
       // 4. Type Filter
       let matchesType = true;
       if (filterType !== "ALL") {
-        matchesType = doc.documentType === filterType;
+        matchesType = doc.documentTypeId === filterType || doc.documentType === filterType;
       }
 
 
@@ -628,9 +612,9 @@ export default function DocumentList({
                   className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:bg-white dark:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-sm appearance-none"
                 >
                   <option value="ALL">ทุกประเภท</option>
-                  {savedDocTypes.map((type, idx) => (
-                    <option key={idx} value={type}>
-                      {type}
+                  {documentTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
                     </option>
                   ))}
                 </select>
@@ -679,14 +663,24 @@ export default function DocumentList({
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
                     <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
-                    <th className="font-semibold py-4 px-6">รหัสเอกสาร</th>
-                    <th className="font-semibold py-4 px-6">Tags</th>
-                    {currentUserRole === "SUPER_ADMIN" && (
-                      <th className="font-semibold py-4 px-6">แผนก</th>
+                    {hasCustomSchema && selectedDocType ? (
+                      selectedDocType.schema.map((field: any) => (
+                        <th key={field.name} className="font-semibold py-4 px-6 whitespace-nowrap">{field.label}</th>
+                      ))
+                    ) : (
+                      <>
+                        <th className="font-semibold py-4 px-6">รหัสเอกสาร</th>
+                        <th className="font-semibold py-4 px-6">Tags</th>
+                        {currentUserRole === "SUPER_ADMIN" && (
+                          <th className="font-semibold py-4 px-6">แผนก</th>
+                        )}
+                      </>
                     )}
                     <th className="font-semibold py-4 px-6">ผู้อัปโหลด</th>
                     <th className="font-semibold py-4 px-6">วันที่</th>
-                    <th className="font-semibold py-4 px-6">ขนาดไฟล์</th>
+                    {!hasCustomSchema && (
+                      <th className="font-semibold py-4 px-6">ขนาดไฟล์</th>
+                    )}
                     <th className="font-semibold py-4 px-6 text-center">
                       จัดการ
                     </th>
@@ -744,7 +738,7 @@ export default function DocumentList({
                             }}
                           >
                             <td
-                              colSpan={currentUserRole === "SUPER_ADMIN" ? 7 : 6}
+                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
                               className="py-3 px-6 text-sm font-medium text-slate-600 dark:text-slate-300 border-y border-slate-200 dark:border-slate-700"
                             >
                               <div className="flex items-center gap-2">
@@ -764,7 +758,7 @@ export default function DocumentList({
                             onClick={() => setCurrentPath([{ id: dept.id, name: dept.name, type: "department" }])}
                           >
                             <td
-                              colSpan={currentUserRole === "SUPER_ADMIN" ? 7 : 6}
+                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
                               className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
                             >
                               <div className="flex items-center justify-between">
@@ -791,7 +785,7 @@ export default function DocumentList({
                             onClick={() => setCurrentPath(prev => [...prev, { id: folder.id, name: folder.name, type: "folder" }])}
                           >
                             <td
-                              colSpan={currentUserRole === "SUPER_ADMIN" ? 8 : 7}
+                              colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
                               className="py-4 px-6 font-bold text-slate-700 dark:text-white text-sm border-y border-slate-200 dark:border-slate-600"
                             >
                               <div className="flex items-center justify-between">
@@ -890,65 +884,82 @@ export default function DocumentList({
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="py-4 px-6">
-                                    <div className="text-sm font-medium text-slate-700 dark:text-white">
-                                      {doc.documentCode || "-"}
-                                    </div>
-                                  </td>
-                                  <td className="py-4 px-6">
-                                    <div className="flex flex-col gap-1.5">
-                                      <div className="flex flex-wrap gap-1">
-                                        {(doc.documentTypeRef?.name || doc.documentType) && (
-                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white border border-slate-200 dark:border-slate-600">
-                                            <Tag size={12} />
-                                            {doc.documentTypeRef?.name || doc.documentType}
-                                          </span>
-                                        )}
-                                        {doc.tags
-                                          .split(",")
-                                          .filter(
-                                            (t) =>
-                                              t.trim() !== "" &&
-                                              t.trim() !== doc.documentType &&
-                                              t.trim() !== doc.documentTypeRef?.name,
-                                          )
-                                          .map((tag, idx) => (
-                                            <span
-                                              key={idx}
-                                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white border border-slate-200 dark:border-slate-600"
-                                            >
-                                              <Tag size={12} />
-                                              {tag.trim()}
-                                            </span>
-                                          ))}
-                                        {!doc.tags && !doc.documentType && !doc.documentTypeRef && (
-                                          <span className="text-sm text-slate-400 dark:text-white">
-                                            -
-                                          </span>
-                                        )}
-                                      </div>
-                                      {doc.customFields && Object.keys(doc.customFields).length > 0 && (
-                                        <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100 dark:border-slate-700/50 pt-1">
-                                          {Object.entries(doc.customFields).map(([key, value]) => {
-                                            const fieldSchema = doc.documentTypeRef?.schema?.find((s: any) => s.name === key);
-                                            const label = fieldSchema?.label || key;
-                                            return (
-                                              <div key={key} className="text-[11px] flex gap-1 items-start">
-                                                <span className="font-medium text-slate-500 dark:text-slate-400 min-w-max">{label}:</span>
-                                                <span className="text-slate-700 dark:text-slate-200 break-words">{String(value)}</span>
-                                              </div>
-                                            );
-                                          })}
+                                  {hasCustomSchema && selectedDocType ? (
+                                    selectedDocType.schema.map((field: any) => {
+                                      let val = doc.customFields?.[field.name];
+                                      if (val === undefined || val === null) val = "-";
+                                      else if (field.type === "checkbox") val = val ? "ใช่" : "ไม่ใช่";
+                                      return (
+                                        <td key={field.name} className="py-4 px-6">
+                                          <div className="text-sm font-medium text-slate-700 dark:text-white line-clamp-2">
+                                            {String(val)}
+                                          </div>
+                                        </td>
+                                      );
+                                    })
+                                  ) : (
+                                    <>
+                                      <td className="py-4 px-6">
+                                        <div className="text-sm font-medium text-slate-700 dark:text-white">
+                                          {doc.documentCode || "-"}
                                         </div>
+                                      </td>
+                                      <td className="py-4 px-6">
+                                        <div className="flex flex-col gap-1.5">
+                                          <div className="flex flex-wrap gap-1">
+                                            {(doc.documentTypeRef?.name || doc.documentType) && (
+                                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white border border-slate-200 dark:border-slate-600">
+                                                <Tag size={12} />
+                                                {doc.documentTypeRef?.name || doc.documentType}
+                                              </span>
+                                            )}
+                                            {doc.tags
+                                              .split(",")
+                                              .filter(
+                                                (t) =>
+                                                  t.trim() !== "" &&
+                                                  t.trim() !== doc.documentType &&
+                                                  t.trim() !== doc.documentTypeRef?.name,
+                                              )
+                                              .map((tag, idx) => (
+                                                <span
+                                                  key={idx}
+                                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-white border border-slate-200 dark:border-slate-600"
+                                                >
+                                                  <Tag size={12} />
+                                                  {tag.trim()}
+                                                </span>
+                                              ))}
+                                            {!doc.tags && !doc.documentType && !doc.documentTypeRef && (
+                                              <span className="text-sm text-slate-400 dark:text-white">
+                                                -
+                                              </span>
+                                            )}
+                                          </div>
+                                          {doc.customFields && Object.keys(doc.customFields).length > 0 && (
+                                            <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100 dark:border-slate-700/50 pt-1">
+                                              {Object.entries(doc.customFields).map(([key, value]) => {
+                                                const fieldSchema = doc.documentTypeRef?.schema?.find((s: any) => s.name === key);
+                                                const label = fieldSchema?.label || key;
+                                                return (
+                                                  <div key={key} className="text-[11px] flex gap-1 items-start">
+                                                    <span className="font-medium text-slate-500 dark:text-slate-400 min-w-max">{label}:</span>
+                                                    <span className="text-slate-700 dark:text-slate-200 break-words">{String(value)}</span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                      {currentUserRole === "SUPER_ADMIN" && (
+                                        <td className="py-4 px-6">
+                                          <div className="text-sm font-medium text-slate-600 dark:text-white">
+                                            {doc.department?.name || "-"}
+                                          </div>
+                                        </td>
                                       )}
-                                    </div>
-                                  </td>
-                                  {currentUserRole === "SUPER_ADMIN" && (
-                                    <td className="py-4 px-6">
-                                      <div className="text-sm font-medium text-slate-600 dark:text-white">
-                                        {doc.department?.name || "-"}
-                                      </div>
-                                    </td>
+                                    </>
                                   )}
                                   <td className="py-4 px-6">
                                     <div className="text-sm font-medium text-slate-700 dark:text-white">
@@ -967,11 +978,13 @@ export default function DocumentList({
                                       )}
                                     </div>
                                   </td>
-                                  <td className="py-4 px-6">
-                                    <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                      {formatFileSize(doc.fileSize)}
-                                    </div>
-                                  </td>
+                                  {!hasCustomSchema && (
+                                    <td className="py-4 px-6">
+                                      <div className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                                        {formatFileSize(doc.fileSize)}
+                                      </div>
+                                    </td>
+                                  )}
                                   <td className="py-4 px-6 whitespace-nowrap">
                                     <div className="flex items-center justify-center gap-2">
                                       {doc.fileType === "application/pdf" ? (
@@ -1079,8 +1092,8 @@ export default function DocumentList({
                 ) : (
                   <tr>
                     <td
-                      colSpan={currentUserRole === "SUPER_ADMIN" ? 6 : 5}
-                      className="py-16 text-center"
+                      colSpan={hasCustomSchema ? 4 + (selectedDocType?.schema?.length || 0) : (currentUserRole === "SUPER_ADMIN" ? 8 : 7)}
+                      className="py-12 text-center text-slate-500 dark:text-white"
                     >
                       <div className="inline-flex flex-col items-center justify-center text-slate-400 dark:text-white">
                         <Search size={48} className="mb-4 opacity-20" />
@@ -1167,30 +1180,16 @@ export default function DocumentList({
                   ประเภทเอกสาร
                 </label>
                 <div className="flex gap-2">
-                  <input
-                    list="editDocTypesList"
+                  <select
                     value={editModal.documentType}
-                    onChange={(e) =>
-                      setEditModal({
-                        ...editModal,
-                        documentType: e.target.value,
-                      })
-                    }
-                    className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    placeholder="เลือกหรือพิมพ์ประเภทเอกสารใหม่..."
-                  />
-                  <datalist id="editDocTypesList">
-                    {savedDocTypes.map((type, idx) => (
-                      <option key={idx} value={type} />
-                    ))}
-                  </datalist>
-                  <button
-                    type="button"
-                    onClick={handleSaveEditDocType}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors dark:bg-slate-700 transition-colors text-slate-700 dark:text-white text-sm font-medium rounded-xl transition whitespace-nowrap shrink-0"
+                    onChange={(e) => setEditModal({ ...editModal, documentType: e.target.value })}
+                    className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
                   >
-                    บันทึก
-                  </button>
+                    <option value="">-- ไม่ระบุ --</option>
+                    {documentTypes.map((type) => (
+                      <option key={type.id} value={type.id}>{type.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
