@@ -114,7 +114,7 @@ export default function DocumentList({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
-  const [filterDepartmentId, setFilterDepartmentId] = useState("ALL");
+  const [filterDepartmentId, setFilterDepartmentId] = useState(currentUserDepartmentId || "ALL");
   const [filterUploaderName, setFilterUploaderName] = useState("ALL");
   const [filterCustomFields, setFilterCustomFields] = useState<Record<string, string>>({});
   const [filterStatus, setFilterStatus] = useState("ALL");
