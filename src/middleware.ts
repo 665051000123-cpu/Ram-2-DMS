@@ -11,11 +11,11 @@ export const config = {
     /*
      * Match all request paths except for the ones starting with:
      * - api/auth (auth API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - api/settings/public
+     * - _next (static files and Next.js internals)
      * - favicon.ico (favicon file)
      * - login
      */
-    "/((?!api/auth|api/settings/public|_next/static|_next/image|favicon.ico|login).*)",
+    "/((?!api/auth|api/settings/public|_next|favicon.ico|login).*)",
   ],
 };
