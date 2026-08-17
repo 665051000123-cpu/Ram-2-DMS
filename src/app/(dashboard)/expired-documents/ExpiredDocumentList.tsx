@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { FileText, Trash, Trash2, Eye, Download } from "lucide-react";
+import { FileText, Trash, Trash2, Eye, Download, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -21,6 +21,12 @@ export default function ExpiredDocumentList({
     docId: "",
     action: null,
   });
+
+  const [viewModal, setViewModal] = useState<{
+    isOpen: boolean;
+    url: string;
+    title: string;
+  }>({ isOpen: false, url: "", title: "" });
 
   const handleAction = async () => {
     const { docId, action } = confirmModal;
@@ -103,15 +109,19 @@ export default function ExpiredDocumentList({
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center justify-center gap-2">
-                  <a
-                    href={`/api/documents/${doc.id}/download?view=true`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    onClick={() =>
+                      setViewModal({
+                        isOpen: true,
+                        url: `/api/documents/${doc.id}/download?view=true`,
+                        title: doc.title || "",
+                      })
+                    }
                     className="p-2 text-blue-500 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition"
                     title="ดูเอกสาร"
                   >
                     <Eye size={18} />
-                  </a>
+                  </button>
                   <a
                     href={`/api/documents/${doc.id}/download`}
                     className="p-2 text-green-500 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-500/20 rounded-lg transition"
@@ -169,6 +179,36 @@ export default function ExpiredDocumentList({
           setConfirmModal({ isOpen: false, docId: "", action: null })
         }
       />
+
+      {viewModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[70] p-4">
+          <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-5xl h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
+              <div className="flex items-center gap-2">
+                <FileText className="text-blue-500" />
+                <h3 className="font-bold text-slate-800 dark:text-white">
+                  {viewModal.title}
+                </h3>
+              </div>
+              <button
+                onClick={() =>
+                  setViewModal({ isOpen: false, url: "", title: "" })
+                }
+                className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors hover:text-red-500 rounded-lg"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-2">
+              <iframe
+                src={viewModal.url}
+                className="w-full h-full rounded-xl border border-slate-200 dark:border-slate-700"
+                title="Document Preview"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
