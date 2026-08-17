@@ -20,6 +20,7 @@ interface DocumentType {
   name: string;
   description: string | null;
   departmentId: string | null;
+  visibleTo: string[] | null;
   department?: { id: string; name: string };
   schema: SchemaField[];
 }
@@ -33,7 +34,7 @@ export default function DocumentTypesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [departmentId, setDepartmentId] = useState<string>("global");
+  const [visibleTo, setVisibleTo] = useState<string[]>(["GLOBAL"]);
   const [fields, setFields] = useState<SchemaField[]>([]);
   const [departments, setDepartments] = useState<{id: string, name: string}[]>([]);
 
@@ -69,13 +70,13 @@ export default function DocumentTypesPage() {
       setEditingId(docType.id);
       setName(docType.name);
       setDescription(docType.description || "");
-      setDepartmentId(docType.departmentId || "global");
+      setVisibleTo((docType as any).visibleTo || ["GLOBAL"]);
       setFields(docType.schema || []);
     } else {
       setEditingId(null);
       setName("");
       setDescription("");
-      setDepartmentId(session?.user?.role === "SUPER_ADMIN" ? "global" : (session?.user?.departmentId || "global"));
+      setVisibleTo(["GLOBAL"]);
       setFields([]);
     }
     setIsModalOpen(true);
@@ -113,7 +114,7 @@ export default function DocumentTypesPage() {
       const payload = {
         name,
         description,
-        departmentId: departmentId === "global" ? null : departmentId,
+        visibleTo,
         schema: fields
       };
 
@@ -157,21 +158,28 @@ export default function DocumentTypesPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Settings className="text-blue-600" /> จัดการประเภทเอกสาร (Document Types)
-          </h1>
-          <p className="text-slate-500 mt-1">กำหนดโครงสร้างฟิลด์สำหรับเอกสารแต่ละประเภท</p>
+      {session?.user?.role !== "SUPER_ADMIN" ? (
+        <div className="text-center mt-20">
+          <h1 className="text-2xl font-bold text-red-600 dark:text-red-300">ปฏิเสธการเข้าถึง</h1>
+          <p className="text-slate-500 dark:text-white mt-2">เฉพาะผู้ดูแลระบบส่วนกลาง (Dev) เท่านั้นที่สามารถจัดการประเภทเอกสารได้</p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors"
-        >
-          <Plus size={20} />
-          เพิ่มประเภทเอกสาร
-        </button>
-      </div>
+      ) : (
+        <>
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Settings className="text-blue-600" /> จัดการประเภทเอกสาร (Document Types)
+              </h1>
+              <p className="text-slate-500 mt-1">กำหนดโครงสร้างฟิลด์สำหรับเอกสารแต่ละประเภท</p>
+            </div>
+            <button
+              onClick={() => openModal()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors"
+            >
+              <Plus size={20} />
+              เพิ่มประเภทเอกสาร
+            </button>
+          </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <table className="w-full text-left border-collapse">
@@ -195,31 +203,32 @@ export default function DocumentTypesPage() {
                     <div className="font-medium text-slate-800 dark:text-white">{doc.name}</div>
                     <div className="text-sm text-slate-500">{doc.description}</div>
                   </td>
-                  <td className="p-4">
-                    {doc.departmentId ? (
-                      <span className="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
-                        {doc.department?.name}
-                      </span>
+                  <td className="p-4 flex flex-wrap gap-1">
+                    {doc.visibleTo && doc.visibleTo.length > 0 ? (
+                      doc.visibleTo.map(deptId => {
+                        const d = departments.find(x => x.id === deptId);
+                        return d ? (
+                          <span key={deptId} className="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
+                            {d.name}
+                          </span>
+                        ) : null;
+                      })
                     ) : (
-                      <span className="px-2.5 py-1 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full text-xs font-medium">
-                        Global (ส่วนกลาง)
-                      </span>
+                      <span className="text-slate-400 text-xs">-</span>
                     )}
                   </td>
                   <td className="p-4 text-slate-600 dark:text-slate-300">
                     {doc.schema.length} ฟิลด์
                   </td>
                   <td className="p-4 text-right">
-                    { (session?.user?.role === "SUPER_ADMIN" || (session?.user?.role === "DEPT_HEAD" && doc.departmentId === session?.user?.departmentId)) && (
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => openModal(doc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                          <Edit2 size={18} />
-                        </button>
-                        <button onClick={() => handleDelete(doc.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => openModal(doc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                        <Edit2 size={18} />
+                      </button>
+                      <button onClick={() => handleDelete(doc.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -255,24 +264,26 @@ export default function DocumentTypesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">แผนก</label>
-                  <select
-                    value={departmentId}
-                    onChange={(e) => setDepartmentId(e.target.value)}
-                    disabled={session?.user?.role !== "SUPER_ADMIN"}
-                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {session?.user?.role === "SUPER_ADMIN" ? (
-                      <>
-                        <option value="global">Global (ส่วนกลาง - ใช้ได้ทุกแผนก)</option>
-                        {departments.map(dept => (
-                          <option key={dept.id} value={dept.id}>แผนก {dept.name}</option>
-                        ))}
-                      </>
-                    ) : (
-                      <option value={session?.user?.departmentId || ""}>แผนกของฉัน</option>
-                    )}
-                  </select>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">การมองเห็น (แผนกที่ใช้งานได้)</label>
+                  <div className="flex flex-col gap-2 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg max-h-48 overflow-y-auto">
+                    {departments.map((dept) => (
+                      <label key={dept.id} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={visibleTo.includes(dept.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setVisibleTo([...visibleTo, dept.id]);
+                            } else {
+                              setVisibleTo(visibleTo.filter(id => id !== dept.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">แผนก {dept.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">คำอธิบาย</label>
@@ -398,6 +409,8 @@ export default function DocumentTypesPage() {
             </form>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

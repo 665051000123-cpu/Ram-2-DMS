@@ -51,12 +51,9 @@ export default function Sidebar({
     }
   }
 
-  if (session?.user?.role === "SUPER_ADMIN" || session?.user?.role === "DEPT_HEAD") {
-    menuItems.push({ icon: Settings, label: "จัดการประเภทเอกสาร", href: "/document-types" });
-  }
-
-  // ตั้งค่าระบบ เฉพาะ SUPER_ADMIN
+  // จัดการประเภทเอกสาร และ ตั้งค่าระบบ เฉพาะ SUPER_ADMIN
   if (session?.user?.role === "SUPER_ADMIN") {
+    menuItems.push({ icon: Settings, label: "จัดการประเภทเอกสาร", href: "/document-types" });
     menuItems.push({ icon: Settings, label: "ตั้งค่าระบบ", href: "/settings" });
   }
 

@@ -38,11 +38,19 @@ export const authOptions: NextAuthOptions = {
           throw new Error("รหัสผ่านไม่ถูกต้อง");
         }
 
+        let effectiveRole = user.role;
+        if (
+          user.role === "DEPT_HEAD" &&
+          (user.department?.name === "DEV" || user.department?.name === "แผนก IT" || user.department?.name === "IT")
+        ) {
+          effectiveRole = "SUPER_ADMIN";
+        }
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: effectiveRole,
           departmentId: user.departmentId,
           departmentName: user.department?.name,
           forcePasswordChange: (user as any).forcePasswordChange,

@@ -6,7 +6,8 @@ import fs from "fs";
 import path from "path";
 const archiver = require("archiver");
 import { PassThrough } from "stream";
-import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, rgb, degrees } from "pdf-lib";
 
 export async function POST(req: Request) {
   try {
@@ -51,7 +52,11 @@ export async function POST(req: Request) {
     }));
     await prisma.auditLog.createMany({ data: auditLogs });
 
-    const watermarkSetting = await prisma.systemSetting.findUnique({ where: { key: "ENABLE_PDF_WATERMARK" } });
+    const settings = await prisma.systemSetting.findMany({
+      where: { key: { in: ["ENABLE_PDF_WATERMARK", "WATERMARK_TEXT"] } }
+    });
+    const watermarkSetting = settings.find((s: any) => s.key === "ENABLE_PDF_WATERMARK");
+    const watermarkTextSetting = settings.find((s: any) => s.key === "WATERMARK_TEXT");
     const isWatermarkEnabled = watermarkSetting?.value === "true";
 
     const archive = archiver("zip", { zlib: { level: 9 } });
@@ -90,19 +95,34 @@ export async function POST(req: Request) {
         let filename = `${doc.title}${ext}`.replace(/[/\\?%*:|"<>]/g, '-');
         
         const isPdf = doc.fileType === "application/pdf" || ext === ".pdf";
-        const isSharedExternally = doc.accessList.length > 0;
 
-        if (isWatermarkEnabled && isPdf && isSharedExternally) {
+        if (isPdf) {
           try {
             const fileBuffer = fs.readFileSync(filePath);
             const pdfDoc = await PDFDocument.load(fileBuffer);
+            pdfDoc.registerFontkit(fontkit);
+            const fontPath = path.join(process.cwd(), "public", "fonts", "Sarabun-Regular.ttf");
+            const fontBytes = fs.readFileSync(fontPath);
+            const font = await pdfDoc.embedFont(fontBytes);
             const pages = pdfDoc.getPages();
-            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            const watermarkText = `Confidential - Downloaded by ${session.user.name} - ${new Date().toLocaleString('th-TH')}`;
+
+            const customText = watermarkTextSetting?.value || "Confidential";
+            const baseText = customText.replace(/{name}/g, "").replace(/{time}/g, "").replace(/-\s*-/g, "-").trim();
+            const watermarkText = `${baseText} - Downloaded by ${session.user.name || "Unknown"} - ${new Date().toLocaleString('th-TH')}`;
             
             pages.forEach((page) => {
+              const { width, height } = page.getSize();
+              const fontSize = 36;
+              const textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+              
               page.drawText(watermarkText, {
-                x: 50, y: 50, size: 14, font, color: rgb(0.85, 0.2, 0.2), opacity: 0.5, rotate: degrees(45),
+                x: width / 2 - (textWidth / 2.5),
+                y: height / 2 - (textWidth / 2.5),
+                size: fontSize,
+                font,
+                color: rgb(0.4, 0.7, 0.9), // Light blue
+                opacity: 0.4,
+                rotate: degrees(45),
               });
             });
 

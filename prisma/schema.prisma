@@ -124,6 +124,7 @@ model documenttype {
   name         String
   description  String?
   departmentId String?
+  visibleTo    Json?
   schema       Json
   createdAt    DateTime    @default(now())
   updatedAt    DateTime

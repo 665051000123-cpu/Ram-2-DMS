@@ -34,7 +34,7 @@ export default function UploadPage() {
   const [folderId, setFolderId] = useState("");
   const [folders, setFolders] = useState<any[]>([]);
   const [retentionPeriod, setRetentionPeriod] = useState<Date | null>(null);
-  const [hasNoExpiry, setHasNoExpiry] = useState(false);
+  const [hasNoExpiry, setHasNoExpiry] = useState(true);
 
   // Visibility State
   const [visibility, setVisibility] = useState("PRIVATE");
@@ -292,7 +292,7 @@ export default function UploadPage() {
         setVisibility("PRIVATE");
         setSharedDepartments([]);
         setRetentionPeriod(null);
-        setHasNoExpiry(false);
+        setHasNoExpiry(true);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     } catch (error) {
@@ -507,7 +507,7 @@ export default function UploadPage() {
                   <option value="">-- ไม่ระบุประเภท (เอกสารทั่วไป) --</option>
                   {docTypes.map((type) => (
                     <option key={type.id} value={type.id}>
-                      {type.name} {type.departmentId ? ` (เฉพาะแผนก ${type.department?.name})` : " (Global)"}
+                      {type.name}
                     </option>
                   ))}
                 </select>

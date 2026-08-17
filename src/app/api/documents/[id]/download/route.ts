@@ -4,7 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
-import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, rgb, degrees } from "pdf-lib";
 
 export async function GET(
   req: Request,
@@ -149,28 +150,42 @@ export async function GET(
     }
 
     // Check Watermark Setting
-    const watermarkSetting = await prisma.systemSetting.findUnique({ where: { key: "ENABLE_PDF_WATERMARK" } });
-    const isWatermarkEnabled = watermarkSetting?.value === "true";
-    const isPdf = document.fileType === "application/pdf" || ext === ".pdf";
-    const isSharedExternally = document.accessList.length > 0; // Simple logic to watermark if shared outside
+    const settings = await prisma.systemSetting.findMany({
+      where: { key: { in: ["ENABLE_PDF_WATERMARK", "WATERMARK_TEXT"] } }
+    });
+    const watermarkSetting = settings.find((s: any) => s.key === "ENABLE_PDF_WATERMARK");
+    const watermarkTextSetting = settings.find((s: any) => s.key === "WATERMARK_TEXT");
 
-    if (isWatermarkEnabled && isPdf && isSharedExternally) {
+    const isPdf = document.fileType === "application/pdf" || ext === ".pdf";
+
+    if (isPdf) {
       try {
         const fileBuffer = fs.readFileSync(filePath);
         const pdfDoc = await PDFDocument.load(fileBuffer);
+        pdfDoc.registerFontkit(fontkit);
+        
+        const fontPath = path.join(process.cwd(), "public", "fonts", "Sarabun-Regular.ttf");
+        const fontBytes = fs.readFileSync(fontPath);
+        const font = await pdfDoc.embedFont(fontBytes);
         const pages = pdfDoc.getPages();
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const watermarkText = `Confidential - Downloaded by ${session.user.name} - ${new Date().toLocaleString('th-TH')}`;
+
+        const customText = watermarkTextSetting?.value || "Confidential";
+        // Clean up old variables if any, then append the user info
+        const baseText = customText.replace(/{name}/g, "").replace(/{time}/g, "").replace(/-\s*-/g, "-").trim();
+        const watermarkText = `${baseText} - Downloaded by ${session.user.name || "Unknown"} - ${new Date().toLocaleString('th-TH')}`;
         
         pages.forEach((page) => {
           const { width, height } = page.getSize();
+          const fontSize = 36;
+          const textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+          
           page.drawText(watermarkText, {
-            x: 50,
-            y: 50,
-            size: 14,
+            x: width / 2 - (textWidth / 2.5),
+            y: height / 2 - (textWidth / 2.5),
+            size: fontSize,
             font,
-            color: rgb(0.85, 0.2, 0.2),
-            opacity: 0.5,
+            color: rgb(0.4, 0.7, 0.9), // Light blue
+            opacity: 0.4,
             rotate: degrees(45),
           });
         });
@@ -181,9 +196,9 @@ export async function GET(
         // Fix: Convert Uint8Array to Buffer for NextResponse
         const buffer = Buffer.from(modifiedPdfBytes);
         return new NextResponse(buffer, { headers });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to watermark PDF:", err);
-        // Fallback to normal stream if watermark fails
+        return NextResponse.json({ error: "Watermark Error: " + err.message + " | Stack: " + err.stack }, { status: 500 });
       }
     }
 

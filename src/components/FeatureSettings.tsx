@@ -8,6 +8,7 @@ export default function FeatureSettings() {
   const [settings, setSettings] = useState({
     ENABLE_AUTO_OCR: false,
     ENABLE_PDF_WATERMARK: false,
+    WATERMARK_TEXT: "Confidential",
     STRICT_FILE_VALIDATION: false,
   });
   
@@ -26,6 +27,7 @@ export default function FeatureSettings() {
         setSettings({
           ENABLE_AUTO_OCR: data.ENABLE_AUTO_OCR === "true",
           ENABLE_PDF_WATERMARK: data.ENABLE_PDF_WATERMARK === "true",
+          WATERMARK_TEXT: data.WATERMARK_TEXT || "Confidential",
           STRICT_FILE_VALIDATION: data.STRICT_FILE_VALIDATION === "true",
         });
       }
@@ -124,51 +126,32 @@ export default function FeatureSettings() {
             </label>
           </div>
 
-          <div className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+          <div className="flex flex-col p-4 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+            <div className="flex items-start gap-4 w-full">
+              <div className="mt-1 p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg shrink-0">
                 <FileSignature size={20} />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-medium text-slate-900 dark:text-white">Dynamic PDF Watermark (ลายน้ำ)</h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                   ประทับตราลายน้ำระบุชื่อผู้ใช้และเวลา ลงบนไฟล์ PDF ที่เป็นเอกสารส่วนตัว (Private) ตอนกดดูหรือดาวน์โหลด
                 </p>
+                <div className="mt-4 w-full">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ข้อความลายน้ำ (Watermark Text)</label>
+                  <input
+                    type="text"
+                    value={settings.WATERMARK_TEXT}
+                    onChange={(e) => setSettings({ ...settings, WATERMARK_TEXT: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    placeholder="e.g. Confidential หรือ เอกสารควบคุม"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">ระบบจะทำการต่อท้ายด้วยชื่อผู้ดาวน์โหลด และเวลาให้โดยอัตโนมัติ (เช่น {settings.WATERMARK_TEXT || "Confidential"} - Downloaded by สมชาย - 17/08/2026 10:48)</p>
+                </div>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={settings.ENABLE_PDF_WATERMARK}
-                onChange={() => handleToggle("ENABLE_PDF_WATERMARK")}
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-purple-600"></div>
-            </label>
           </div>
 
-          <div className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg">
-                <Shield size={20} />
-              </div>
-              <div>
-                <h3 className="font-medium text-slate-900 dark:text-white">Strict File Validation (ตรวจเช็คไฟล์ขั้นสูง)</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  ตรวจสอบความถูกต้องของประเภทไฟล์ (Magic Bytes) ก่อนบันทึกลงระบบ เพื่อป้องกันการปลอมแปลงนามสกุลไฟล์ไวรัส
-                </p>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={settings.STRICT_FILE_VALIDATION}
-                onChange={() => handleToggle("STRICT_FILE_VALIDATION")}
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-red-600"></div>
-            </label>
-          </div>
+
 
         </div>
       </div>

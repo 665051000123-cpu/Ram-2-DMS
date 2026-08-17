@@ -24,7 +24,7 @@ import {
   ChevronRight,
   Building2,
   Shield,
-  Link,
+  Globe,
   Unlink,
   MessageSquare,
   Inbox,
@@ -36,7 +36,7 @@ import toast from "react-hot-toast";
 import ConfirmModal from "./ConfirmModal";
 import ScannerSelectionModal from "./ScannerSelectionModal";
 
-import DocumentLinkModal from "./DocumentLinkModal";
+import DocumentVisibilityModal from "./DocumentVisibilityModal";
 import DocumentCommentModal from "./DocumentCommentModal";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -214,7 +214,7 @@ export default function DocumentList({
     doc: null,
   });
 
-  const [linkModal, setLinkModal] = useState<{
+  const [visibilityModal, setVisibilityModal] = useState<{
     isOpen: boolean;
     doc: Document | null;
   }>({
@@ -854,7 +854,7 @@ export default function DocumentList({
               <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-white text-sm border-b border-slate-200 dark:border-slate-600">
                     {isSelectionMode && (<th className="font-semibold py-4 px-4 w-12 text-center"><input type="checkbox" onChange={handleSelectAll} checked={filteredDocs.length > 0 && selectedDocIds.length === filteredDocs.length} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" /></th>)}
-                    <th className="font-semibold py-4 px-6">ชื่อเอกสาร</th>
+                    <th className="font-semibold py-4 px-6 min-w-[300px]">ชื่อเอกสาร</th>
                     {hasCustomSchema && selectedDocType ? (
                       selectedDocType.schema.map((field: any) => (
                         <th key={field.name} className="font-semibold py-4 px-6 whitespace-nowrap">{field.label || field.name}</th>
@@ -1110,11 +1110,11 @@ export default function DocumentList({
                                             <MessageSquare size={18} />
                                           </button>
                                           <button
-                                            onClick={() => setLinkModal({ isOpen: true, doc })}
-                                            className="p-2 text-slate-500 dark:text-white hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                                            title="เชื่อมโยงเอกสาร (Link)"
+                                            onClick={() => setVisibilityModal({ isOpen: true, doc })}
+                                            className="p-2 text-slate-500 dark:text-white hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                                            title="การจัดการการมองเห็น"
                                           >
-                                            <Link size={18} />
+                                            <Globe size={18} />
                                           </button>
                                           <button
                                             onClick={() => handleEditClick(doc)}
@@ -1497,12 +1497,12 @@ export default function DocumentList({
 
 
 
-      {linkModal.isOpen && linkModal.doc && (
-        <DocumentLinkModal 
-           isOpen={linkModal.isOpen}
-           docId={linkModal.doc.id}
-           docTitle={linkModal.doc.title}
-           onClose={() => setLinkModal({ isOpen: false, doc: null })}
+      {visibilityModal.isOpen && visibilityModal.doc && (
+        <DocumentVisibilityModal 
+           isOpen={visibilityModal.isOpen}
+           docId={visibilityModal.doc.id}
+           docTitle={visibilityModal.doc.title}
+           onClose={() => setVisibilityModal({ isOpen: false, doc: null })}
         />
       )}
 

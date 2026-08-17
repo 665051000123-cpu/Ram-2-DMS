@@ -12,6 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1107.0",
     "@libsql/client": "^0.17.4",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@prisma/adapter-libsql": "^7.9.1",
     "@prisma/client": "^6.19.3",
     "@types/pdf-parse": "^1.1.5",
