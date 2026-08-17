@@ -62,6 +62,7 @@ model User {
   documentAccess   DocumentAccess[]
   folderAccess     FolderAccess[]
   comments         Comment[]
+  externalShares   ExternalShare[]
 }
 
 model Document {
@@ -111,6 +112,7 @@ model Document {
   linkedFrom DocumentLink[] @relation("LinkedFrom")
   linkedTo   DocumentLink[] @relation("LinkedTo")
   comments   Comment[]
+  externalShares ExternalShare[]
 }
 
 model DocumentLink {
@@ -257,6 +259,19 @@ model DocumentType {
   updatedAt    DateTime    @updatedAt
   
   documents    Document[]
+}
+
+model ExternalShare {
+  id         String    @id @default(uuid())
+  documentId String
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  token      String    @unique
+  password   String?
+  expiresAt  DateTime?
+  createdBy  String
+  user       User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  viewCount  Int       @default(0)
 }
 
 
