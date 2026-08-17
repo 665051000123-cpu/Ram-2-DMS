@@ -108,16 +108,32 @@ export async function POST(req: Request) {
 
             const customText = watermarkTextSetting?.value || "Confidential";
             const baseText = customText.replace(/{name}/g, "").replace(/{time}/g, "").replace(/-\s*-/g, "-").trim();
-            const watermarkText = `${baseText} - Downloaded by ${session.user.name || "Unknown"} - ${new Date().toLocaleString('th-TH')}`;
+            const watermarkText = `${baseText} - ${session.user.name || "Unknown"} - ${new Date().toLocaleString('th-TH')}`;
             
             pages.forEach((page) => {
               const { width, height } = page.getSize();
-              const fontSize = 36;
-              const textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+              let fontSize = 36;
+              let textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+              
+              const diagonal = Math.sqrt(width * width + height * height);
+              const maxTextWidth = diagonal * 0.8;
+              
+              if (textWidth > maxTextWidth) {
+                fontSize = Math.floor(fontSize * (maxTextWidth / textWidth));
+                textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+              }
+
+              const textHeight = font.heightAtSize(fontSize);
+              const radians = Math.PI / 4;
+              const cx = width / 2;
+              const cy = height / 2;
+              
+              const x = cx - (textWidth / 2) * Math.cos(radians) + (textHeight / 2) * Math.sin(radians);
+              const y = cy - (textWidth / 2) * Math.sin(radians) - (textHeight / 2) * Math.cos(radians);
               
               page.drawText(watermarkText, {
-                x: width / 2 - (textWidth / 2.5),
-                y: height / 2 - (textWidth / 2.5),
+                x,
+                y,
                 size: fontSize,
                 font,
                 color: rgb(0.4, 0.7, 0.9), // Light blue
