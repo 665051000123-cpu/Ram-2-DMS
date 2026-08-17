@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { FileText, RefreshCcw, Trash2 } from "lucide-react";
+import { FileText, RefreshCcw, Trash2, Eye, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -115,6 +115,22 @@ export default function RecycleBinList({
               </td>
               <td className="py-4 px-6">
                 <div className="flex items-center justify-center gap-2">
+                  <a
+                    href={`/api/documents/${doc.id}/download?view=true`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 text-blue-500 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded-lg transition"
+                    title="ดูเอกสาร"
+                  >
+                    <Eye size={18} />
+                  </a>
+                  <a
+                    href={`/api/documents/${doc.id}/download`}
+                    className="p-2 text-green-500 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-500/20 rounded-lg transition"
+                    title="ดาวน์โหลด"
+                  >
+                    <Download size={18} />
+                  </a>
                   <button
                     onClick={() =>
                       setConfirmModal({

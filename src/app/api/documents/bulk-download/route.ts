@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
 
     const documents = await prisma.document.findMany({
-      where: { id: { in: documentIds }, isDeleted: false },
+      where: { id: { in: documentIds } },
       include: { accessList: true },
     });
 
@@ -95,8 +95,13 @@ export async function POST(req: Request) {
         let filename = `${doc.title}${ext}`.replace(/[/\\?%*:|"<>]/g, '-');
         
         const isPdf = doc.fileType === "application/pdf" || ext === ".pdf";
+        const isExpired = doc.retentionPeriod && new Date(doc.retentionPeriod) < new Date();
+        const isDeleted = doc.isDeleted;
+        
+        // บังคับมีลายน้ำเสมอสำหรับเอกสารที่ถูกลบ หรือหมดอายุ (ต่อให้การตั้งค่าหลักจะปิดอยู่)
+        const shouldWatermark = isWatermarkEnabled || isDeleted || isExpired;
 
-        if (isPdf) {
+        if (isPdf && shouldWatermark) {
           try {
             const fileBuffer = fs.readFileSync(filePath);
             const pdfDoc = await PDFDocument.load(fileBuffer);

@@ -27,7 +27,7 @@ export async function GET(
 
     // Find the document
     const document = await prisma.document.findUnique({
-      where: { id: docId, isDeleted: false },
+      where: { id: docId },
       include: { accessList: true, versions: true },
     });
 
@@ -157,8 +157,14 @@ export async function GET(
     const watermarkTextSetting = settings.find((s: any) => s.key === "WATERMARK_TEXT");
 
     const isPdf = document.fileType === "application/pdf" || ext === ".pdf";
+    const isWatermarkEnabled = watermarkSetting?.value === "true";
+    const isExpired = document.retentionPeriod && new Date(document.retentionPeriod) < new Date();
+    const isDeleted = document.isDeleted;
+    
+    // บังคับมีลายน้ำเสมอสำหรับเอกสารที่ถูกลบ หรือหมดอายุ (ต่อให้การตั้งค่าหลักจะปิดอยู่)
+    const shouldWatermark = isWatermarkEnabled || isDeleted || isExpired;
 
-    if (isPdf) {
+    if (isPdf && shouldWatermark) {
       try {
         const fileBuffer = fs.readFileSync(filePath);
         const pdfDoc = await PDFDocument.load(fileBuffer);
