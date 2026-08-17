@@ -499,8 +499,20 @@ export default function UploadPage() {
                 <select
                   value={documentTypeId}
                   onChange={(e) => {
-                    setDocumentTypeId(e.target.value);
-                    setCustomFieldsData({}); // Reset custom fields when type changes
+                    const selectedId = e.target.value;
+                    setDocumentTypeId(selectedId);
+                    
+                    // Reset or populate with default values
+                    const selectedType = docTypes.find(t => t.id === selectedId);
+                    const defaultFields: Record<string, any> = {};
+                    if (selectedType?.schema) {
+                      selectedType.schema.forEach((f: any) => {
+                        if (f.defaultValue) {
+                          defaultFields[f.name] = f.defaultValue;
+                        }
+                      });
+                    }
+                    setCustomFieldsData(defaultFields);
                   }}
                   className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                 >
@@ -552,6 +564,7 @@ export default function UploadPage() {
                   {field.type === 'textarea' ? (
                     <textarea
                       required={field.required}
+                      placeholder={field.placeholder || ""}
                       value={customFieldsData[field.name] || ''}
                       onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.value })}
                       className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
@@ -569,6 +582,24 @@ export default function UploadPage() {
                         <option key={idx} value={opt}>{opt}</option>
                       ))}
                     </select>
+                  ) : field.type === 'radio' ? (
+                    <div className="flex flex-wrap gap-4 mt-2">
+                      {field.options?.split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string, optIdx: number) => (
+                        <label key={optIdx} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`field_${field.name}_${idx}`}
+                            required={field.required && !customFieldsData[field.name]}
+                            checked={customFieldsData[field.name] === opt}
+                            onChange={(e) => {
+                              if (e.target.checked) setCustomFieldsData({ ...customFieldsData, [field.name]: opt })
+                            }}
+                            className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{opt}</span>
+                        </label>
+                      ))}
+                    </div>
                   ) : field.type === 'checkbox' ? (
                     <div className="flex items-center h-[42px]">
                       <label className="flex items-center gap-3 cursor-pointer">
@@ -579,17 +610,21 @@ export default function UploadPage() {
                           onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.checked })}
                           className="w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                         />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">ใช่ / ตกลง</span>
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{field.placeholder || "ใช่ / ตกลง"}</span>
                       </label>
                     </div>
                   ) : (
                     <input
-                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                      type={field.type}
                       required={field.required}
+                      placeholder={field.placeholder || ""}
                       value={customFieldsData[field.name] || ''}
                       onChange={(e) => setCustomFieldsData({ ...customFieldsData, [field.name]: e.target.value })}
                       className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                     />
+                  )}
+                  {field.description && (
+                    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{field.description}</p>
                   )}
                 </div>
               ))}

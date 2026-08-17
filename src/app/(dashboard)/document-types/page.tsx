@@ -5,14 +5,17 @@ import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { Plus, Edit2, Trash2, Settings, PlusCircle, Trash } from "lucide-react";
 
-type FieldType = "text" | "number" | "date" | "select" | "textarea" | "checkbox";
+type FieldType = "text" | "number" | "date" | "select" | "textarea" | "checkbox" | "time" | "datetime-local" | "email" | "tel" | "url" | "radio";
 
 interface SchemaField {
   name: string;
   label: string;
   type: FieldType;
   required: boolean;
-  options?: string; // Comma separated options for select
+  options?: string; // Comma separated options for select/radio
+  placeholder?: string;
+  description?: string;
+  defaultValue?: string;
 }
 
 interface DocumentType {
@@ -348,13 +351,19 @@ export default function DocumentTypesPage() {
                               <option value="textarea">ข้อความยาว (Textarea)</option>
                               <option value="number">ตัวเลข (Number)</option>
                               <option value="date">วันที่ (Date)</option>
+                              <option value="time">เวลา (Time)</option>
+                              <option value="datetime-local">วันและเวลา (Date & Time)</option>
+                              <option value="email">อีเมล (Email)</option>
+                              <option value="tel">เบอร์โทรศัพท์ (Tel)</option>
+                              <option value="url">ลิงก์/เว็บไซต์ (URL)</option>
                               <option value="select">ตัวเลือก (Dropdown)</option>
+                              <option value="radio">ตัวเลือกวงกลม (Radio)</option>
                               <option value="checkbox">กล่องกาเครื่องหมาย (Checkbox)</option>
                             </select>
                           </div>
                           
-                          {field.type === "select" && (
-                            <div className="col-span-10 mt-2">
+                          {(field.type === "select" || field.type === "radio") && (
+                            <div className="col-span-12">
                               <label className="block text-xs font-medium text-slate-500 mb-1">รายการตัวเลือก (คั่นด้วยลูกน้ำ ",")</label>
                               <input
                                 type="text"
@@ -366,7 +375,39 @@ export default function DocumentTypesPage() {
                             </div>
                           )}
 
-                          <div className="col-span-2 flex items-center justify-center pt-5">
+                          {/* Advanced Config */}
+                          <div className="col-span-4 mt-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Placeholder (ข้อความแนะนำ)</label>
+                            <input
+                              type="text"
+                              value={field.placeholder || ""}
+                              onChange={(e) => updateField(index, "placeholder", e.target.value)}
+                              placeholder="เช่น กรุณากรอกอีเมล"
+                              className="w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-4 mt-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Description (คำอธิบายใต้ช่อง)</label>
+                            <input
+                              type="text"
+                              value={field.description || ""}
+                              onChange={(e) => updateField(index, "description", e.target.value)}
+                              placeholder="อธิบายว่าฟิลด์นี้คืออะไร"
+                              className="w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          <div className="col-span-4 mt-2">
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Default Value (ค่าเริ่มต้น)</label>
+                            <input
+                              type="text"
+                              value={field.defaultValue || ""}
+                              onChange={(e) => updateField(index, "defaultValue", e.target.value)}
+                              placeholder="ค่าเริ่มต้น"
+                              className="w-full px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+
+                          <div className="col-span-12 flex items-center pt-2">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input
                                 type="checkbox"
@@ -374,7 +415,7 @@ export default function DocumentTypesPage() {
                                 onChange={(e) => updateField(index, "required", e.target.checked)}
                                 className="w-4 h-4 text-blue-600 rounded border-slate-300"
                               />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">บังคับกรอก</span>
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">บังคับกรอก (Required)</span>
                             </label>
                           </div>
                         </div>
