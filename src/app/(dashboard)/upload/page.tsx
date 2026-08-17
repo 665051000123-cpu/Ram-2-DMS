@@ -8,6 +8,8 @@ import toast from "react-hot-toast";
 import CameraCapture from "@/components/CameraCapture";
 import ScannerSelectionModal from "@/components/ScannerSelectionModal";
 import ConfirmModal from "@/components/ConfirmModal";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -31,6 +33,8 @@ export default function UploadPage() {
   const [customFieldsData, setCustomFieldsData] = useState<Record<string, any>>({});
   const [folderId, setFolderId] = useState("");
   const [folders, setFolders] = useState<any[]>([]);
+  const [retentionPeriod, setRetentionPeriod] = useState<Date | null>(null);
+  const [hasNoExpiry, setHasNoExpiry] = useState(false);
 
   // Visibility State
   const [visibility, setVisibility] = useState("PRIVATE");
@@ -244,6 +248,7 @@ export default function UploadPage() {
         formData.append("customFields", JSON.stringify(customFieldsData));
         formData.append("visibility", visibility);
         formData.append("sharedDepartments", JSON.stringify(sharedDepartments));
+        if (retentionPeriod) formData.append("retentionPeriod", retentionPeriod.toISOString());
 
         // Scanned file path only applies if it's a single file and we have the path, 
         // but for bulk we'll just upload the blob directly as a normal file.
@@ -286,6 +291,8 @@ export default function UploadPage() {
         setCustomFieldsData({});
         setVisibility("PRIVATE");
         setSharedDepartments([]);
+        setRetentionPeriod(null);
+        setHasNoExpiry(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     } catch (error) {
@@ -504,6 +511,36 @@ export default function UploadPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-white">
+                    วันหมดอายุของเอกสาร <span className="text-red-500">*</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasNoExpiry}
+                      onChange={(e) => {
+                        setHasNoExpiry(e.target.checked);
+                        if (e.target.checked) setRetentionPeriod(null);
+                      }}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">ไม่มีวันหมดอายุ</span>
+                  </label>
+                </div>
+                <DatePicker
+                  selected={retentionPeriod}
+                  onChange={(date: Date | null) => setRetentionPeriod(date)}
+                  dateFormat="dd/MM/yyyy"
+                  disabled={hasNoExpiry}
+                  required={!hasNoExpiry}
+                  placeholderText="DD/MM/YYYY"
+                  className={`w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all ${hasNoExpiry ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800' : 'cursor-pointer'}`}
+                  wrapperClassName="w-full block"
+                />
               </div>
 
               {/* Dynamic Custom Fields */}

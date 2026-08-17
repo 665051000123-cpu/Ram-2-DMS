@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { exec } from "child_process";
 import fs from "fs";
+import path from "path";
 
 export async function POST(req: Request) {
   try {
@@ -21,26 +22,27 @@ export async function POST(req: Request) {
     let exePath = appPathConfig;
     if (exePath.startsWith('"')) {
       exePath = exePath.split('"')[1];
-    } else {
-      exePath = exePath.split(' ')[0];
     }
 
     if (!fs.existsSync(exePath)) {
       return NextResponse.json({ error: "Scanner app executable not found at specified path." }, { status: 404 });
     }
 
-    // Launch the application (Windows)
-    let launchCmd = appPathConfig;
-    // If it doesn't start with quote and has no spaces in path, or it's just a raw path without quotes
-    if (!appPathConfig.startsWith('"') && !appPathConfig.includes('"')) {
-       launchCmd = `"${appPathConfig}"`;
-    }
+    // Get the directory of the executable to use as working directory
+    const exeDir = path.dirname(exePath);
 
-    exec(`start "" ${launchCmd}`, (error) => {
-      if (error) {
-        console.error("Failed to launch scanner app:", error);
-      }
-    });
+    try {
+      const { exec } = require("child_process");
+      // Use explorer.exe to launch the app or shortcut in the user's interactive desktop context.
+      // This mimics a double-click and ensures TWAIN drivers initialize correctly.
+      exec(`explorer.exe "${exePath}"`, (error: any) => {
+        if (error) {
+          console.error("Failed to launch scanner:", error);
+        }
+      });
+    } catch (error) {
+      console.error("Failed to spawn scanner app:", error);
+    }
 
     return NextResponse.json({ success: true, message: "Scanner app launched" });
 

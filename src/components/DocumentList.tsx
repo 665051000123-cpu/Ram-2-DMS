@@ -28,7 +28,7 @@ import {
   Unlink,
   MessageSquare,
   Inbox,
-  History,
+  History, Share2,
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1621,6 +1621,7 @@ export default function DocumentList({
     </div>
   );
 }
+
 
 
 

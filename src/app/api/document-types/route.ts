@@ -13,15 +13,21 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const departmentId = searchParams.get("departmentId");
+    const manage = searchParams.get("manage") === "true";
 
     let whereClause: any = {};
     
     // For normal users, only show global templates and their own department's templates
     if (session.user.role !== "SUPER_ADMIN") {
-      whereClause.OR = [
-        { departmentId: null },
-        { departmentId: session.user.departmentId }
-      ];
+      if (manage && session.user.role === "DEPT_HEAD") {
+        // When managing document types, DEPT_HEAD only sees their own department's types (no Global)
+        whereClause.departmentId = session.user.departmentId;
+      } else {
+        whereClause.OR = [
+          { departmentId: null },
+          { departmentId: session.user.departmentId }
+        ];
+      }
     } else {
       // Super admin can filter by department if provided
       if (departmentId) {

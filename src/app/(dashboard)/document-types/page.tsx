@@ -35,14 +35,26 @@ export default function DocumentTypesPage() {
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState<string>("global");
   const [fields, setFields] = useState<SchemaField[]>([]);
+  const [departments, setDepartments] = useState<{id: string, name: string}[]>([]);
 
   useEffect(() => {
     fetchDocTypes();
+    fetchDepartments();
   }, []);
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch("/api/departments");
+      const data = await res.json();
+      setDepartments(Array.isArray(data) ? data : (data.departments || []));
+    } catch (error) {
+      console.error("Failed to load departments", error);
+    }
+  };
 
   const fetchDocTypes = async () => {
     try {
-      const res = await fetch("/api/document-types");
+      const res = await fetch("/api/document-types?manage=true");
       const data = await res.json();
       setDocTypes(data.documentTypes || []);
     } catch (error) {
@@ -198,14 +210,16 @@ export default function DocumentTypesPage() {
                     {doc.schema.length} ฟิลด์
                   </td>
                   <td className="p-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openModal(doc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
-                        <Edit2 size={18} />
-                      </button>
-                      <button onClick={() => handleDelete(doc.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    { (session?.user?.role === "SUPER_ADMIN" || (session?.user?.role === "DEPT_HEAD" && doc.departmentId === session?.user?.departmentId)) && (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => openModal(doc)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                          <Edit2 size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(doc.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))
@@ -248,8 +262,16 @@ export default function DocumentTypesPage() {
                     disabled={session?.user?.role !== "SUPER_ADMIN"}
                     className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   >
-                    {session?.user?.role === "SUPER_ADMIN" && <option value="global">Global (ส่วนกลาง - ใช้ได้ทุกแผนก)</option>}
-                    <option value={session?.user?.departmentId || ""}>แผนกของฉัน</option>
+                    {session?.user?.role === "SUPER_ADMIN" ? (
+                      <>
+                        <option value="global">Global (ส่วนกลาง - ใช้ได้ทุกแผนก)</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>แผนก {dept.name}</option>
+                        ))}
+                      </>
+                    ) : (
+                      <option value={session?.user?.departmentId || ""}>แผนกของฉัน</option>
+                    )}
                   </select>
                 </div>
                 <div className="col-span-2">

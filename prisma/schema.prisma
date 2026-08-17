@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -13,144 +8,259 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  SUPER_ADMIN
-  DEPT_HEAD
-  STAFF
+model auditlog {
+  id         String          @id
+  action     auditlog_action
+  documentId String?
+  userId     String?
+  details    String?
+  createdAt  DateTime        @default(now())
+  document   document?       @relation(fields: [documentId], references: [id], map: "AuditLog_documentId_fkey")
+  user       user?           @relation(fields: [userId], references: [id], map: "AuditLog_userId_fkey")
+
+  @@index([documentId], map: "AuditLog_documentId_fkey")
+  @@index([userId], map: "AuditLog_userId_fkey")
 }
 
-enum Visibility {
-  PRIVATE
-  PUBLIC
-  CUSTOM
-}
-
-model Department {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users          User[]
-  documents      Document[] @relation("DocumentDepartment")
-  sharedDocuments Document[] @relation("DocumentSharedDepartments")
-  folders        Folder[]
-  folderAccess   FolderAccess[]
-  documentTypes  DocumentType[]
-}
-
-model User {
-  id                  String      @id @default(uuid())
-  email               String      @unique
-  passwordHash        String
-  name                String
-  role                Role        @default(STAFF)
-  isActive            Boolean     @default(true)
-  forcePasswordChange Boolean     @default(true)
-  notifyOnUpload      Boolean     @default(true)
-  notifyOnShare       Boolean     @default(true)
-  departmentId        String?
-  department          Department? @relation(fields: [departmentId], references: [id])
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-
-  uploadedDocs     Document[]
-  uploadedVersions DocumentVersion[]
-  auditLogs        AuditLog[]
-  favorites        Favorite[]
-  notifications    Notification[]
-  documentAccess   DocumentAccess[]
-  folderAccess     FolderAccess[]
-  comments         Comment[]
-}
-
-model Document {
-  id             String  @id @default(uuid())
-  title          String
-  description    String?
-  fileUrl        String // URL หรือที่เก็บไฟล์ในระบบ
-  fileType       String // เช่น 'application/pdf', 'image/jpeg'
-  fileSize       Int     @default(0) // ขนาดไฟล์เป็น byte
-  storagePath    String? // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลด (เช่น D:\DMS_Uploads)
-  extractedText  String? @db.LongText // ข้อความที่สกัดจากไฟล์ (OCR/PDF Parsing)
-  tags           String // รูปแบบการจัดเก็บ tag คั่นด้วย comma separated
-  documentType    String? // (Legacy)
-  
-  documentTypeId  String?
-  documentTypeRef DocumentType? @relation(fields: [documentTypeId], references: [id])
-  customFields    Json?
-  
-  currentVersion Int     @default(1)
-
-  documentCode    String?   @unique
-  retentionPeriod DateTime?
-  isExpired       Boolean   @default(false)
-
-  departmentId String
-  department   Department @relation("DocumentDepartment", fields: [departmentId], references: [id])
-
-  visibility   Visibility @default(PRIVATE)
-  sharedDepartments Department[] @relation("DocumentSharedDepartments")
-
-  folderId String?
-  folder   Folder? @relation(fields: [folderId], references: [id])
-
-  uploaderId String
-  uploader   User   @relation(fields: [uploaderId], references: [id])
-
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  isDeleted Boolean   @default(false)
-  deletedAt DateTime?
-
-  auditLogs   AuditLog[]
-  versions    DocumentVersion[]
-  favoritedBy Favorite[]
-  accessList  DocumentAccess[]
-
-  linkedFrom DocumentLink[] @relation("LinkedFrom")
-  linkedTo   DocumentLink[] @relation("LinkedTo")
-  comments   Comment[]
-}
-
-model DocumentLink {
-  id         String   @id @default(uuid())
-  sourceId   String
-  source     Document @relation("LinkedFrom", fields: [sourceId], references: [id], onDelete: Cascade)
-  targetId   String
-  target     Document @relation("LinkedTo", fields: [targetId], references: [id], onDelete: Cascade)
+model comment {
+  id         String   @id
+  text       String   @db.Text
+  documentId String
+  userId     String
   createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  document   document @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "Comment_documentId_fkey")
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Comment_userId_fkey")
 
-  @@unique([sourceId, targetId])
+  @@index([documentId], map: "Comment_documentId_fkey")
+  @@index([userId], map: "Comment_userId_fkey")
 }
 
-model DocumentVersion {
-  id            String   @id @default(uuid())
+model department {
+  id                                         String         @id
+  name                                       String         @unique(map: "Department_name_key")
+  createdAt                                  DateTime       @default(now())
+  updatedAt                                  DateTime
+  document_document_departmentIdTodepartment document[]     @relation("document_departmentIdTodepartment")
+  documenttype                               documenttype[]
+  folder                                     folder[]
+  folderaccess                               folderaccess[]
+  user                                       user[]
+  document_documentshareddepartments         document[]     @relation("documentshareddepartments")
+}
+
+model document {
+  id                                           String              @id
+  title                                        String
+  description                                  String?
+  fileUrl                                      String
+  fileType                                     String
+  tags                                         String
+  departmentId                                 String
+  uploaderId                                   String
+  createdAt                                    DateTime            @default(now())
+  updatedAt                                    DateTime
+  currentVersion                               Int                 @default(1)
+  documentType                                 String?
+  deletedAt                                    DateTime?
+  isDeleted                                    Boolean             @default(false)
+  fileSize                                     Int                 @default(0)
+  extractedText                                String?             @db.LongText
+  storagePath                                  String?
+  folderId                                     String?
+  documentCode                                 String?             @unique(map: "Document_documentCode_key")
+  isExpired                                    Boolean             @default(false)
+  retentionPeriod                              DateTime?
+  customFields                                 Json?
+  documentTypeId                               String?
+  visibility                                   document_visibility @default(PRIVATE)
+  auditlog                                     auditlog[]
+  comment                                      comment[]
+  department_document_departmentIdTodepartment department          @relation("document_departmentIdTodepartment", fields: [departmentId], references: [id], map: "Document_departmentId_fkey")
+  documenttype                                 documenttype?       @relation(fields: [documentTypeId], references: [id], map: "Document_documentTypeId_fkey")
+  folder                                       folder?             @relation(fields: [folderId], references: [id], map: "Document_folderId_fkey")
+  user                                         user                @relation(fields: [uploaderId], references: [id], map: "Document_uploaderId_fkey")
+  documentaccess                               documentaccess[]
+  documentlink_documentlink_sourceIdTodocument documentlink[]      @relation("documentlink_sourceIdTodocument")
+  documentlink_documentlink_targetIdTodocument documentlink[]      @relation("documentlink_targetIdTodocument")
+  documentversion                              documentversion[]
+  externalshare                                externalshare[]
+  favorite                                     favorite[]
+  department_documentshareddepartments         department[]        @relation("documentshareddepartments")
+
+  @@index([departmentId], map: "Document_departmentId_fkey")
+  @@index([documentTypeId], map: "Document_documentTypeId_fkey")
+  @@index([folderId], map: "Document_folderId_fkey")
+  @@index([uploaderId], map: "Document_uploaderId_fkey")
+}
+
+model documentaccess {
+  id         String   @id
+  documentId String
+  userId     String
+  canEdit    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  document   document @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "DocumentAccess_documentId_fkey")
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "DocumentAccess_userId_fkey")
+
+  @@unique([documentId, userId], map: "DocumentAccess_documentId_userId_key")
+  @@index([userId], map: "DocumentAccess_userId_fkey")
+}
+
+model documentlink {
+  id                                       String   @id
+  sourceId                                 String
+  targetId                                 String
+  createdAt                                DateTime @default(now())
+  document_documentlink_sourceIdTodocument document @relation("documentlink_sourceIdTodocument", fields: [sourceId], references: [id], onDelete: Cascade, map: "DocumentLink_sourceId_fkey")
+  document_documentlink_targetIdTodocument document @relation("documentlink_targetIdTodocument", fields: [targetId], references: [id], onDelete: Cascade, map: "DocumentLink_targetId_fkey")
+
+  @@unique([sourceId, targetId], map: "DocumentLink_sourceId_targetId_key")
+  @@index([targetId], map: "DocumentLink_targetId_fkey")
+}
+
+model documenttype {
+  id           String      @id
+  name         String
+  description  String?
+  departmentId String?
+  schema       Json
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime
+  document     document[]
+  department   department? @relation(fields: [departmentId], references: [id], map: "DocumentType_departmentId_fkey")
+
+  @@index([departmentId], map: "DocumentType_departmentId_fkey")
+}
+
+model documentversion {
+  id            String   @id
   documentId    String
-  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   version       Int
   fileUrl       String
   fileType      String
-  fileSize      Int      @default(0)
-  storagePath   String? // เก็บโฟลเดอร์หลัก ณ ตอนอัปโหลดของเวอร์ชันนี้
-  extractedText String?  @db.LongText
   uploaderId    String
-  uploader      User     @relation(fields: [uploaderId], references: [id])
   createdAt     DateTime @default(now())
+  fileSize      Int      @default(0)
+  extractedText String?  @db.LongText
+  storagePath   String?
+  document      document @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "DocumentVersion_documentId_fkey")
+  user          user     @relation(fields: [uploaderId], references: [id], map: "DocumentVersion_uploaderId_fkey")
+
+  @@index([documentId], map: "DocumentVersion_documentId_fkey")
+  @@index([uploaderId], map: "DocumentVersion_uploaderId_fkey")
 }
 
-model Favorite {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model externalshare {
+  id         String    @id
   documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  token      String    @unique(map: "ExternalShare_token_key")
+  password   String?
+  expiresAt  DateTime?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  viewCount  Int       @default(0)
+  user       user      @relation(fields: [createdBy], references: [id], onDelete: Cascade, map: "ExternalShare_createdBy_fkey")
+  document   document  @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "ExternalShare_documentId_fkey")
 
-  @@unique([userId, documentId])
+  @@index([createdBy], map: "ExternalShare_createdBy_fkey")
+  @@index([documentId], map: "ExternalShare_documentId_fkey")
 }
 
-enum ActionType {
+model favorite {
+  id         String   @id
+  userId     String
+  documentId String
+  createdAt  DateTime @default(now())
+  document   document @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "Favorite_documentId_fkey")
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Favorite_userId_fkey")
+
+  @@unique([userId, documentId], map: "Favorite_userId_documentId_key")
+  @@index([documentId], map: "Favorite_documentId_fkey")
+}
+
+model folder {
+  id           String         @id
+  name         String
+  description  String?
+  departmentId String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  parentId     String?
+  document     document[]
+  department   department?    @relation(fields: [departmentId], references: [id], map: "Folder_departmentId_fkey")
+  folder       folder?        @relation("folderTofolder", fields: [parentId], references: [id], map: "Folder_parentId_fkey")
+  other_folder folder[]       @relation("folderTofolder")
+  folderaccess folderaccess[]
+
+  @@index([departmentId], map: "Folder_departmentId_fkey")
+  @@index([parentId], map: "Folder_parentId_fkey")
+}
+
+model folderaccess {
+  id           String             @id
+  folderId     String
+  departmentId String?
+  createdAt    DateTime           @default(now())
+  role         folderaccess_role?
+  userId       String?
+  department   department?        @relation(fields: [departmentId], references: [id], onDelete: Cascade, map: "FolderAccess_departmentId_fkey")
+  folder       folder             @relation(fields: [folderId], references: [id], onDelete: Cascade, map: "FolderAccess_folderId_fkey")
+  user         user?              @relation(fields: [userId], references: [id], onDelete: Cascade, map: "FolderAccess_userId_fkey")
+
+  @@index([departmentId], map: "FolderAccess_departmentId_fkey")
+  @@index([folderId], map: "FolderAccess_folderId_fkey")
+  @@index([userId], map: "FolderAccess_userId_fkey")
+}
+
+model notification {
+  id        String   @id
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Notification_userId_fkey")
+
+  @@index([userId], map: "Notification_userId_fkey")
+}
+
+model systemsetting {
+  id        String   @id
+  key       String   @unique(map: "SystemSetting_key_key")
+  value     String   @db.Text
+  updatedAt DateTime
+}
+
+model user {
+  id                  String            @id
+  email               String            @unique(map: "User_email_key")
+  passwordHash        String
+  name                String
+  role                user_role         @default(STAFF)
+  departmentId        String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime
+  forcePasswordChange Boolean           @default(true)
+  notifyOnShare       Boolean           @default(true)
+  notifyOnUpload      Boolean           @default(true)
+  isActive            Boolean           @default(true)
+  auditlog            auditlog[]
+  comment             comment[]
+  document            document[]
+  documentaccess      documentaccess[]
+  documentversion     documentversion[]
+  externalshare       externalshare[]
+  favorite            favorite[]
+  folderaccess        folderaccess[]
+  notification        notification[]
+  department          department?       @relation(fields: [departmentId], references: [id], map: "User_departmentId_fkey")
+
+  @@index([departmentId], map: "User_departmentId_fkey")
+}
+
+enum auditlog_action {
   UPLOAD
   VIEW
   DOWNLOAD
@@ -159,103 +269,20 @@ enum ActionType {
   RESTORE_VERSION
 }
 
-model AuditLog {
-  id         String     @id @default(uuid())
-  action     ActionType
-  documentId String?
-  document   Document?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  userId     String?
-  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
-  details    String? // ข้อมูลเพิ่มเติม เช่น comment
-  createdAt  DateTime   @default(now())
+enum folderaccess_role {
+  SUPER_ADMIN
+  DEPT_HEAD
+  STAFF
 }
 
-model DocumentAccess {
-  id         String   @id @default(uuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  canEdit    Boolean  @default(false)
-  createdAt  DateTime @default(now())
-
-  @@unique([documentId, userId])
+enum user_role {
+  SUPER_ADMIN
+  DEPT_HEAD
+  STAFF
 }
 
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  message   String
-  isRead    Boolean  @default(false)
-  link      String?
-  createdAt DateTime @default(now())
+enum document_visibility {
+  PRIVATE
+  PUBLIC
+  CUSTOM
 }
-
-model SystemSetting {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String   @db.Text
-  updatedAt DateTime @updatedAt
-}
-
-model Folder {
-  id           String      @id @default(uuid())
-  name         String
-  description  String?
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-
-  parentId   String?
-  parent     Folder?  @relation("FolderToSubFolder", fields: [parentId], references: [id])
-  subFolders Folder[] @relation("FolderToSubFolder")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  documents  Document[]
-  accessList FolderAccess[]
-}
-
-model FolderAccess {
-  id       String @id @default(uuid())
-  folderId String
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  role Role?
-
-  createdAt DateTime @default(now())
-}
-
-model Comment {
-  id         String   @id @default(uuid())
-  text       String   @db.Text
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model DocumentType {
-  id           String      @id @default(uuid())
-  name         String
-  description  String?
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  schema       Json
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  
-  documents    Document[]
-}
-
-
