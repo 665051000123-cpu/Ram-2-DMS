@@ -134,13 +134,6 @@ export default function RecycleBinList({
                   >
                     <Eye size={18} />
                   </button>
-                  <a
-                    href={`/api/documents/${doc.id}/download`}
-                    className="p-2 text-green-500 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-500/20 rounded-lg transition"
-                    title="ดาวน์โหลด"
-                  >
-                    <Download size={18} />
-                  </a>
                   <button
                     onClick={() =>
                       setConfirmModal({
