@@ -78,9 +78,9 @@ export default async function DocumentsPage() {
     if (session.user.departmentId) {
       accessibleDeptIds.add(session.user.departmentId);
     }
-    accessibleFolders.forEach((f: any) => {
-      if (f.departmentId) {
-        accessibleDeptIds.add(f.departmentId);
+    documents.forEach((doc: any) => {
+      if (doc.departmentId) {
+        accessibleDeptIds.add(doc.departmentId);
       }
     });
     
