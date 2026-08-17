@@ -174,31 +174,27 @@ export default function ExpiredDocumentList({
       />
 
       {viewModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[70] p-4">
-          <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl shadow-xl w-full max-w-5xl h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
-              <div className="flex items-center gap-2">
-                <FileText className="text-blue-500" />
-                <h3 className="font-bold text-slate-800 dark:text-white">
-                  {viewModal.title}
-                </h3>
-              </div>
-              <button
-                onClick={() =>
-                  setViewModal({ isOpen: false, url: "", title: "" })
-                }
-                className="p-2 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors hover:text-red-500 rounded-lg"
-              >
-                <XCircle size={24} />
-              </button>
-            </div>
-            <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-2">
-              <iframe
-                src={viewModal.url}
-                className="w-full h-full rounded-xl border border-slate-200 dark:border-slate-700"
-                title="Document Preview"
-              />
-            </div>
+        <div className="fixed inset-0 bg-slate-900 flex flex-col z-[100]">
+          <div className="w-full bg-white dark:bg-slate-900 transition-colors p-4 flex justify-between items-center shadow-sm">
+            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <FileText className="text-blue-600 dark:text-blue-300" />
+              {viewModal.title}
+            </h3>
+            <button
+              onClick={() =>
+                setViewModal({ isOpen: false, url: "", title: "" })
+              }
+              className="p-2 text-slate-400 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-800 hover:text-red-500 rounded-lg"
+            >
+              <XCircle size={24} />
+            </button>
+          </div>
+          <div className="w-full flex-1 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <iframe
+              src={viewModal.url}
+              className="w-full h-full border-0"
+              title="Document Preview"
+            />
           </div>
         </div>
       )}
