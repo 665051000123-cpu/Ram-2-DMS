@@ -116,7 +116,7 @@ export async function GET(
     });
 
     return NextResponse.json({
-      shares: shares.map((s) => ({
+      shares: shares.map((s: any) => ({
         ...s,
         hasPassword: !!s.password,
         password: undefined, // Don't send the actual hash to frontend

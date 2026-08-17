@@ -24,7 +24,7 @@ export async function GET(req: Request) {
         if (!doc.visibleTo) return true; // Default to global if not set (backwards compatible)
         const visibleTo = doc.visibleTo as string[];
         if (visibleTo.includes("GLOBAL")) return true;
-        return visibleTo.includes(session.user.departmentId);
+        return session.user.departmentId ? visibleTo.includes(session.user.departmentId) : false;
       });
     }
 

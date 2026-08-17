@@ -18,7 +18,7 @@ export async function GET(
     const document = await prisma.document.findUnique({
       where: { id },
       include: {
-        department_documentshareddepartments: {
+        sharedDepartments: {
           select: { id: true }
         }
       }
@@ -34,7 +34,7 @@ export async function GET(
        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const sharedDepartments = document.department_documentshareddepartments.map((d: any) => d.id);
+    const sharedDepartments = document.sharedDepartments.map((d: any) => d.id);
 
     return NextResponse.json({
       visibility: document.visibility,
@@ -81,11 +81,11 @@ export async function PUT(
     };
 
     if (visibility === "CUSTOM") {
-      updateData.department_documentshareddepartments = {
+      updateData.sharedDepartments = {
         set: (sharedDepartments || []).map((deptId: string) => ({ id: deptId }))
       };
     } else {
-      updateData.department_documentshareddepartments = {
+      updateData.sharedDepartments = {
         set: []
       };
     }
