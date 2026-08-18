@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 title DMS Server - Auto Reload (Dev Mode)
 color 0E
 

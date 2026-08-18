@@ -8,6 +8,10 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+generator clientNode {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
