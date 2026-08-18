@@ -39,14 +39,31 @@ export default function AuditLogList({
   currentUserRole: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterAction, setFilterAction] = useState("ALL");
+  const [filterDepartment, setFilterDepartment] = useState("ALL");
+
+  // Get unique departments for the dropdown
+  const uniqueDepartments = Array.from(
+    new Set(
+      initialLogs
+        .map(log => log.document?.department?.name)
+        .filter(Boolean) as string[]
+    )
+  );
 
   const filteredLogs = initialLogs.filter((log) => {
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = 
       log.user?.name.toLowerCase().includes(searchLower) ||
-      log.document?.title.toLowerCase().includes(searchLower) ||
-      log.action.toLowerCase().includes(searchLower)
-    );
+      (log.document?.title && log.document.title.toLowerCase().includes(searchLower)) ||
+      log.action.toLowerCase().includes(searchLower);
+
+    const matchesAction = filterAction === "ALL" || log.action === filterAction;
+    
+    const docDeptName = log.document?.department?.name;
+    const matchesDepartment = filterDepartment === "ALL" || docDeptName === filterDepartment;
+
+    return matchesSearch && matchesAction && matchesDepartment;
   });
 
   const getActionIcon = (action: string) => {
@@ -157,16 +174,46 @@ export default function AuditLogList({
           />
         </div>
 
-        {currentUserRole === "SUPER_ADMIN" && (
-          <button
-            onClick={handleExportExcel}
-            disabled={filteredLogs.length === 0}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:bg-emerald-500/20 font-semibold rounded-xl transition whitespace-nowrap w-full md:w-auto disabled:opacity-50"
+        <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+          {/* Action Filter */}
+          <select
+            value={filterAction}
+            onChange={(e) => setFilterAction(e.target.value)}
+            className="px-4 py-2 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm"
           >
-            <FileSpreadsheet size={20} />
-            Export to Excel
-          </button>
-        )}
+            <option value="ALL">ทุกการกระทำ (All Actions)</option>
+            <option value="UPLOAD">อัปโหลด (Upload)</option>
+            <option value="DOWNLOAD">ดาวน์โหลด (Download)</option>
+            <option value="VIEW">เปิดดู (View)</option>
+            <option value="EDIT">แก้ไข (Edit)</option>
+            <option value="DELETE">ลบ (Delete)</option>
+          </select>
+
+          {/* Department Filter (Only for SUPER_ADMIN) */}
+          {currentUserRole === "SUPER_ADMIN" && uniqueDepartments.length > 0 && (
+            <select
+              value={filterDepartment}
+              onChange={(e) => setFilterDepartment(e.target.value)}
+              className="px-4 py-2 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm"
+            >
+              <option value="ALL">ทุกแผนก (All Departments)</option>
+              {uniqueDepartments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          )}
+
+          {currentUserRole === "SUPER_ADMIN" && (
+            <button
+              onClick={handleExportExcel}
+              disabled={filteredLogs.length === 0}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-100 dark:bg-emerald-500/20 font-semibold rounded-xl transition whitespace-nowrap w-full sm:w-auto disabled:opacity-50 shadow-sm"
+            >
+              <FileSpreadsheet size={20} />
+              Export to Excel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
