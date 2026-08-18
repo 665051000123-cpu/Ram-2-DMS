@@ -48,6 +48,11 @@ export default async function AuditLogsPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  const allDepartments = await prisma.department.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true }
+  });
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div>
@@ -59,7 +64,11 @@ export default async function AuditLogsPage() {
         </p>
       </div>
 
-      <AuditLogList initialLogs={logs} currentUserRole={session.user.role} />
+      <AuditLogList 
+        initialLogs={logs} 
+        currentUserRole={session.user.role} 
+        allDepartments={allDepartments}
+      />
     </div>
   );
 }
