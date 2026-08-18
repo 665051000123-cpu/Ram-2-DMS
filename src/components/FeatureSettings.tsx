@@ -145,7 +145,7 @@ export default function FeatureSettings() {
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="e.g. Confidential หรือ เอกสารควบคุม"
                   />
-                  <p className="text-xs text-slate-500 mt-1">ระบบจะทำการต่อท้ายด้วยชื่อผู้ดาวน์โหลด และเวลาให้โดยอัตโนมัติ (เช่น {settings.WATERMARK_TEXT || "Confidential"} - Downloaded by สมชาย - 17/08/2026 10:48)</p>
+                  <p className="text-xs text-slate-500 mt-1">ระบบจะทำการต่อท้ายด้วยชื่อผู้ดาวน์โหลด และเวลาให้โดยอัตโนมัติ (เช่น {settings.WATERMARK_TEXT || "Confidential"} - สมชาย - 17/08/2026 10:48)</p>
                 </div>
               </div>
             </div>
