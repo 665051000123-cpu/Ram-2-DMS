@@ -50,7 +50,7 @@ export default function SessionTimeoutWrapper({
       timeoutId = setTimeout(() => {
         toast.error("เซสชันหมดอายุเนื่องจากไม่มีการใช้งานระบบ", { duration: 5000 });
         // Logout due to inactivity
-        signOut({ callbackUrl: "/login" });
+        signOut({ callbackUrl: `${window.location.origin}/login` });
       }, timeoutMinutes * 60 * 1000);
     };
 

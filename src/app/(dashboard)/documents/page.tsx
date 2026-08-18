@@ -65,6 +65,7 @@ export default async function DocumentsPage() {
       documentTypeRef: true,
       favoritedBy: { where: { userId: session.user.id } },
       versions: { orderBy: { version: "desc" } },
+      sharedDepartments: { select: { id: true } },
     },
     orderBy: { createdAt: "desc" },
   });

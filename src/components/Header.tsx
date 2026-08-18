@@ -40,7 +40,7 @@ export default function Header() {
             />
           </Link>
           <button
-            onClick={() => signOut()}
+            onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
             className="text-slate-400 dark:text-white hover:text-red-500 dark:hover:text-red-400 transition ml-2"
           >
             <LogOut size={18} />

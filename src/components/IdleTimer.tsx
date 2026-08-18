@@ -19,7 +19,7 @@ export default function IdleTimer() {
     timeoutRef.current = setTimeout(() => {
       // If idle timeout reached, log the user out
       if (session) {
-        signOut({ callbackUrl: "/login?idle=true" });
+        signOut({ callbackUrl: `${window.location.origin}/login?idle=true` });
       }
     }, IDLE_TIMEOUT);
   };

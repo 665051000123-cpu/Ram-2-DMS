@@ -59,6 +59,12 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // Allows relative callback URLs
+      if (url.startsWith("/")) return new URL(url, baseUrl).toString();
+      // Allows absolute URLs (like http://192.168.1.x/login)
+      return url;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;

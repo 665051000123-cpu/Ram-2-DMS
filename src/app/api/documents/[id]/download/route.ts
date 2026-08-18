@@ -28,7 +28,7 @@ export async function GET(
     // Find the document
     const document = await prisma.document.findUnique({
       where: { id: docId },
-      include: { accessList: true, versions: true },
+      include: { accessList: true, versions: true, sharedDepartments: true },
     });
 
     if (!document) {
@@ -43,8 +43,10 @@ export async function GET(
       const isUploader = document.uploaderId === session.user.id;
       const isSameDepartment = document.departmentId === session.user.departmentId;
       const hasSharedAccess = document.accessList.some((a: any) => a.userId === session.user.id);
+      const isPublic = document.visibility === "PUBLIC";
+      const isSharedDepartment = document.visibility === "CUSTOM" && document.sharedDepartments.some((d: any) => d.id === session.user.departmentId);
       
-      if (!isUploader && !isSameDepartment && !hasSharedAccess) {
+      if (!isUploader && !isSameDepartment && !hasSharedAccess && !isPublic && !isSharedDepartment) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }

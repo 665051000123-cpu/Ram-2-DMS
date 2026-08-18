@@ -47,7 +47,7 @@ export default function ForcePasswordChange() {
 
       // Force sign out to refresh session and force login with new password
       setTimeout(() => {
-        signOut({ callbackUrl: "/login" });
+        signOut({ callbackUrl: `${window.location.origin}/login` });
       }, 2000);
     } catch (error: any) {
       toast.error(error.message);

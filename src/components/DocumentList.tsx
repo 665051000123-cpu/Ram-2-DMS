@@ -58,6 +58,7 @@ type Document = {
   customFields?: any;
   documentTypeRef?: { id: string; name: string; schema: any[] } | null;
   fileSize?: number;
+  sharedDepartments?: { id: string }[];
   favoritedBy?: { userId: string }[];
   versions?: {
     id: string;
@@ -276,7 +277,9 @@ export default function DocumentList({
       // 4. Department Filter
       let matchesDept = true;
       if (filterDepartmentId !== "ALL") {
-        matchesDept = doc.departmentId === filterDepartmentId;
+        const isOwner = doc.departmentId === filterDepartmentId;
+        const isShared = !!doc.sharedDepartments?.some((d: any) => d.id === filterDepartmentId);
+        matchesDept = isOwner || isShared;
       }
 
       // 5. Uploader Filter
