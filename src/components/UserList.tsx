@@ -133,7 +133,7 @@ export default function UserList({
           body: JSON.stringify({
             name,
             email,
-            password: "hospital123", // Default Password
+            password: password || "hospital123", // Use custom password or default
             role,
             departmentId,
           }),
@@ -482,23 +482,24 @@ export default function UserList({
                   maxLength={6}
                 />
               </div>
-              {editingUserId && currentUserRole === "SUPER_ADMIN" && (
+              {(!editingUserId || currentUserRole === "SUPER_ADMIN") && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1">
-                    รหัสผ่านใหม่ (ไม่บังคับ)
+                    {editingUserId ? "รหัสผ่านใหม่ (ไม่บังคับ)" : "รหัสผ่าน (ไม่บังคับ)"}
                   </label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full p-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    placeholder="ปล่อยว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน"
+                    placeholder={editingUserId ? "ปล่อยว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน" : "ปล่อยว่างเพื่อใช้รหัสเริ่มต้น (hospital123)"}
                     minLength={6}
                     autoComplete="new-password"
                   />
                   <p className="text-xs text-slate-500 dark:text-white mt-1">
-                    หากคุณเปลี่ยนรหัสผ่าน
-                    ผู้ใช้จะถูกบังคับให้ตั้งรหัสใหม่เมื่อเข้าใช้งานครั้งถัดไป
+                    {editingUserId
+                      ? "หากคุณเปลี่ยนรหัสผ่าน ผู้ใช้จะถูกบังคับให้ตั้งรหัสใหม่เมื่อเข้าใช้งานครั้งถัดไป"
+                      : "หากไม่ระบุรหัสผ่าน ระบบจะใช้รหัสผ่านเริ่มต้นคือ hospital123"}
                   </p>
                 </div>
               )}
