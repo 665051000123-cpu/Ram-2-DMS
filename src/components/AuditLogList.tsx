@@ -34,28 +34,13 @@ type AuditLog = {
 export default function AuditLogList({
   initialLogs,
   currentUserRole,
-  allDepartments = [],
 }: {
   initialLogs: AuditLog[];
   currentUserRole: string;
-  allDepartments?: { id: string; name: string }[];
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterAction, setFilterAction] = useState("ALL");
-  const [filterDepartment, setFilterDepartment] = useState("ALL");
 
-  // Get unique departments for the dropdown (fallback if not provided)
-  const uniqueDepartments = Array.from(
-    new Set(
-      initialLogs
-        .map(log => log.document?.department?.name)
-        .filter(Boolean) as string[]
-    )
-  );
-
-  const departmentsToUse = allDepartments.length > 0 
-    ? allDepartments.map(d => d.name)
-    : uniqueDepartments;
 
   const filteredLogs = initialLogs.filter((log) => {
     const searchLower = searchTerm.toLowerCase();
@@ -65,11 +50,8 @@ export default function AuditLogList({
       log.action.toLowerCase().includes(searchLower);
 
     const matchesAction = filterAction === "ALL" || log.action === filterAction;
-    
-    const docDeptName = log.document?.department?.name;
-    const matchesDepartment = filterDepartment === "ALL" || docDeptName === filterDepartment;
 
-    return matchesSearch && matchesAction && matchesDepartment;
+    return matchesSearch && matchesAction;
   });
 
   const getActionIcon = (action: string) => {
@@ -195,19 +177,7 @@ export default function AuditLogList({
             <option value="DELETE">ลบ (Delete)</option>
           </select>
 
-          {/* Department Filter (Only for SUPER_ADMIN) */}
-          {currentUserRole === "SUPER_ADMIN" && departmentsToUse.length > 0 && (
-            <select
-              value={filterDepartment}
-              onChange={(e) => setFilterDepartment(e.target.value)}
-              className="px-4 py-2 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 shadow-sm"
-            >
-              <option value="ALL">ทุกแผนก (All Departments)</option>
-              {departmentsToUse.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
-              ))}
-            </select>
-          )}
+
 
           {currentUserRole === "SUPER_ADMIN" && (
             <button
