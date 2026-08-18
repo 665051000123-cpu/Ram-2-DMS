@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
-import { Plus, Edit2, Trash2, Settings, PlusCircle, Trash } from "lucide-react";
+import { Plus, Edit2, Trash2, Settings, PlusCircle, Trash, Search } from "lucide-react";
 
 type FieldType = "text" | "number" | "date" | "select" | "textarea" | "checkbox" | "time" | "datetime-local" | "email" | "tel" | "url" | "radio";
 
@@ -40,6 +40,9 @@ export default function DocumentTypesPage() {
   const [visibleTo, setVisibleTo] = useState<string[]>(["GLOBAL"]);
   const [fields, setFields] = useState<SchemaField[]>([]);
   const [departments, setDepartments] = useState<{id: string, name: string}[]>([]);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDepartmentId, setFilterDepartmentId] = useState("ALL");
 
   useEffect(() => {
     fetchDocTypes();
@@ -159,6 +162,18 @@ export default function DocumentTypesPage() {
     }
   };
 
+  const filteredDocTypes = docTypes.filter(doc => {
+    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (doc.description && doc.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // Check if document type is visible to the selected department
+    // "GLOBAL" means visible to all departments
+    const isGlobal = doc.visibleTo && doc.visibleTo.includes("GLOBAL");
+    const matchesDept = filterDepartmentId === "ALL" || isGlobal || (doc.visibleTo && doc.visibleTo.includes(filterDepartmentId));
+
+    return matchesSearch && matchesDept;
+  });
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {session?.user?.role !== "SUPER_ADMIN" ? (
@@ -184,6 +199,34 @@ export default function DocumentTypesPage() {
             </button>
           </div>
 
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="relative w-full sm:max-w-md">
+              <input
+                type="text"
+                placeholder="ค้นหาประเภทเอกสาร..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-white"
+              />
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+            </div>
+
+            <div className="w-full sm:w-auto">
+              <select
+                value={filterDepartmentId}
+                onChange={(e) => setFilterDepartmentId(e.target.value)}
+                className="w-full sm:w-48 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-white"
+              >
+                <option value="ALL">ทุกแผนก</option>
+                {departments.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -197,10 +240,10 @@ export default function DocumentTypesPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={4} className="text-center p-8 text-slate-500">กำลังโหลด...</td></tr>
-            ) : docTypes.length === 0 ? (
-              <tr><td colSpan={4} className="text-center p-8 text-slate-500">ยังไม่มีประเภทเอกสาร</td></tr>
+            ) : filteredDocTypes.length === 0 ? (
+              <tr><td colSpan={4} className="text-center p-8 text-slate-500">ไม่พบประเภทเอกสารที่ค้นหา</td></tr>
             ) : (
-              docTypes.map((doc) => (
+              filteredDocTypes.map((doc) => (
                 <tr key={doc.id} className="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                   <td className="p-4">
                     <div className="font-medium text-slate-800 dark:text-white">{doc.name}</div>
@@ -208,14 +251,20 @@ export default function DocumentTypesPage() {
                   </td>
                   <td className="p-4 flex flex-wrap gap-1">
                     {doc.visibleTo && doc.visibleTo.length > 0 ? (
-                      doc.visibleTo.map(deptId => {
-                        const d = departments.find(x => x.id === deptId);
-                        return d ? (
-                          <span key={deptId} className="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
-                            {d.name}
-                          </span>
-                        ) : null;
-                      })
+                      doc.visibleTo.includes("GLOBAL") ? (
+                        <span className="px-2.5 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs font-medium">
+                          ใช้งานได้ทุกแผนก
+                        </span>
+                      ) : (
+                        doc.visibleTo.map(deptId => {
+                          const d = departments.find(x => x.id === deptId);
+                          return d ? (
+                            <span key={deptId} className="px-2.5 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
+                              {d.name}
+                            </span>
+                          ) : null;
+                        })
+                      )
                     ) : (
                       <span className="text-slate-400 text-xs">-</span>
                     )}
