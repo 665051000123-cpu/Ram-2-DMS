@@ -47,6 +47,25 @@ export default function UploadPage() {
   const [isLoadingScanned, setIsLoadingScanned] = useState(false);
   const [scannedFilePath, setScannedFilePath] = useState<string | null>(null);
 
+  // Custom Dropdown State for Document Type
+  const [isDocTypeOpen, setIsDocTypeOpen] = useState(false);
+  const [docTypeSearch, setDocTypeSearch] = useState("");
+  const docTypeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (docTypeDropdownRef.current && !docTypeDropdownRef.current.contains(event.target as Node)) {
+        setIsDocTypeOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredDocTypes = useMemo(() => {
+    return docTypes.filter(t => t.name.toLowerCase().includes(docTypeSearch.toLowerCase()));
+  }, [docTypes, docTypeSearch]);
+
   const handleScannerFileSelect = (newFile: File) => {
     setScannedFilePath(newFile.name); // Using name as path just for validation logic
     validateAndSetFile(newFile);
@@ -492,37 +511,76 @@ export default function UploadPage() {
                 </div>
               )}
 
-              <div className="md:col-span-2">
+              <div className="md:col-span-2" ref={docTypeDropdownRef}>
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-1.5">
                   ประเภทเอกสาร (Document Type)
                 </label>
-                <select
-                  value={documentTypeId}
-                  onChange={(e) => {
-                    const selectedId = e.target.value;
-                    setDocumentTypeId(selectedId);
-                    
-                    // Reset or populate with default values
-                    const selectedType = docTypes.find(t => t.id === selectedId);
-                    const defaultFields: Record<string, any> = {};
-                    if (selectedType?.schema) {
-                      selectedType.schema.forEach((f: any) => {
-                        if (f.defaultValue) {
-                          defaultFields[f.name] = f.defaultValue;
-                        }
-                      });
-                    }
-                    setCustomFieldsData(defaultFields);
-                  }}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                >
-                  <option value="">-- ไม่ระบุประเภท (เอกสารทั่วไป) --</option>
-                  {docTypes.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <div
+                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 transition-colors border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-white cursor-pointer flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+                    onClick={() => setIsDocTypeOpen(!isDocTypeOpen)}
+                  >
+                    <span className={documentTypeId ? "" : "text-slate-500"}>
+                      {documentTypeId ? docTypes.find(t => t.id === documentTypeId)?.name : "-- ไม่ระบุประเภท (เอกสารทั่วไป) --"}
+                    </span>
+                    <ChevronDown size={18} className="text-slate-400" />
+                  </div>
+
+                  {isDocTypeOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                      <div className="p-2 sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 z-20">
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:border-blue-500 text-slate-700 dark:text-white"
+                          placeholder="ค้นหาประเภทเอกสาร..."
+                          value={docTypeSearch}
+                          onChange={(e) => setDocTypeSearch(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                        />
+                      </div>
+                      <div
+                        className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm text-slate-700 dark:text-slate-300"
+                        onClick={() => {
+                          setDocumentTypeId("");
+                          setCustomFieldsData({});
+                          setIsDocTypeOpen(false);
+                          setDocTypeSearch("");
+                        }}
+                      >
+                        -- ไม่ระบุประเภท (เอกสารทั่วไป) --
+                      </div>
+                      {filteredDocTypes.map((type) => (
+                        <div
+                          key={type.id}
+                          className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm text-slate-700 dark:text-slate-300"
+                          onClick={() => {
+                            setDocumentTypeId(type.id);
+                            
+                            const defaultFields: Record<string, any> = {};
+                            if (type.schema) {
+                              type.schema.forEach((f: any) => {
+                                if (f.defaultValue) {
+                                  defaultFields[f.name] = f.defaultValue;
+                                }
+                              });
+                            }
+                            setCustomFieldsData(defaultFields);
+                            setIsDocTypeOpen(false);
+                            setDocTypeSearch("");
+                          }}
+                        >
+                          {type.name}
+                        </div>
+                      ))}
+                      {filteredDocTypes.length === 0 && (
+                        <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                          ไม่พบประเภทเอกสารที่ค้นหา
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="md:col-span-2">
