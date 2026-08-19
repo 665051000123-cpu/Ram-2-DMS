@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Inbox, RefreshCw, X, FileText, FileImage, FolderSearch } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -24,6 +24,7 @@ export default function ScannerSelectionModal({
   const [isWatching, setIsWatching] = useState(false);
   const [watchStartTime, setWatchStartTime] = useState<number | null>(null);
   const [isBrowserSupported, setIsBrowserSupported] = useState(true);
+  const initialFilesRef = useRef<Set<string>>(new Set());
 
   // Check browser support on mount
   useEffect(() => {
@@ -67,7 +68,7 @@ export default function ScannerSelectionModal({
   const startWatching = async (handle: any) => {
     setIsWatching(true);
     setWatchStartTime(Date.now());
-    await loadFiles(handle);
+    await loadFiles(handle, true);
   };
 
   const getFilesInDir = async (handle: any) => {
@@ -90,10 +91,13 @@ export default function ScannerSelectionModal({
     return files.sort((a, b) => b.lastModified - a.lastModified);
   };
 
-  const loadFiles = async (handle: any) => {
+  const loadFiles = async (handle: any, isInitial = false) => {
     setIsLoading(true);
     try {
       const files = await getFilesInDir(handle);
+      if (isInitial) {
+        initialFilesRef.current = new Set(files.map(f => f.name));
+      }
       setScannedFiles(files);
     } catch (e) {
       console.error(e);
@@ -120,9 +124,11 @@ export default function ScannerSelectionModal({
         try {
           const files = await getFilesInDir(dirHandle);
           
-          // Detect if a NEW file was added AFTER we started watching
-          // We add a 500ms buffer in case of slight time differences
-          const newFile = files.find(f => f.lastModified > watchStartTime + 500);
+          // Detect if a NEW file was added (by new file name not in initial set OR by new timestamp)
+          const newFile = files.find(f => 
+            !initialFilesRef.current.has(f.name) || 
+            f.lastModified > watchStartTime + 500
+          );
           
           if (newFile) {
             clearInterval(interval);
