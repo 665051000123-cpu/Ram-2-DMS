@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import { getUploadDir } from "@/lib/storage";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 

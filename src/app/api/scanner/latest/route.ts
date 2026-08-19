@@ -39,17 +39,23 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const since = searchParams.get("since");
+    const clientWatchDir = searchParams.get("watchDir");
     if (!since) return NextResponse.json({ error: "Missing since parameter" }, { status: 400 });
     const sinceMs = parseInt(since, 10);
 
     let watchDir = path.join(process.cwd(), "scanned-docs");
-    try {
-      const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
-      if (setting && setting.value) {
-        watchDir = setting.value;
+    
+    if (clientWatchDir) {
+      watchDir = clientWatchDir;
+    } else {
+      try {
+        const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
+        if (setting && setting.value) {
+          watchDir = setting.value;
+        }
+      } catch (e) {
+        console.error("Failed to fetch SCANNER_DIR from DB", e);
       }
-    } catch (e) {
-      console.error("Failed to fetch SCANNER_DIR from DB", e);
     }
 
     // Passive Auto-Cleanup: Run asynchronously (fire-and-forget)

@@ -9,6 +9,8 @@ export default function FeatureSettings() {
     ENABLE_AUTO_OCR: false,
     ENABLE_PDF_WATERMARK: false,
     WATERMARK_TEXT: "Confidential",
+    WATERMARK_COLOR: "#66b2e5",
+    WATERMARK_OPACITY: "5",
     STRICT_FILE_VALIDATION: false,
   });
   
@@ -28,6 +30,8 @@ export default function FeatureSettings() {
           ENABLE_AUTO_OCR: data.ENABLE_AUTO_OCR === "true",
           ENABLE_PDF_WATERMARK: data.ENABLE_PDF_WATERMARK === "true",
           WATERMARK_TEXT: data.WATERMARK_TEXT || "Confidential",
+          WATERMARK_COLOR: data.WATERMARK_COLOR || "#66b2e5",
+          WATERMARK_OPACITY: data.WATERMARK_OPACITY || "5",
           STRICT_FILE_VALIDATION: data.STRICT_FILE_VALIDATION === "true",
         });
       }
@@ -145,7 +149,33 @@ export default function FeatureSettings() {
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="e.g. Confidential หรือ เอกสารควบคุม"
                   />
-                  <p className="text-xs text-slate-500 mt-1">ระบบจะทำการต่อท้ายด้วยชื่อผู้ดาวน์โหลด และเวลาให้โดยอัตโนมัติ (เช่น {settings.WATERMARK_TEXT || "Confidential"} - สมชาย - 17/08/2026 10:48)</p>
+                  <p className="text-xs text-slate-500 mt-1 mb-4">ระบบจะทำการต่อท้ายด้วยชื่อผู้ดาวน์โหลด และเวลาให้โดยอัตโนมัติ (เช่น {settings.WATERMARK_TEXT || "Confidential"} - สมชาย - 17/08/2026 10:48)</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">สีของลายน้ำ (Color)</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={settings.WATERMARK_COLOR}
+                          onChange={(e) => setSettings({ ...settings, WATERMARK_COLOR: e.target.value })}
+                          className="h-10 w-14 rounded-lg cursor-pointer bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 p-1"
+                        />
+                        <span className="text-sm text-slate-500 font-mono">{settings.WATERMARK_COLOR}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">ความเข้มของลายน้ำ (Opacity): {settings.WATERMARK_OPACITY}%</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="100"
+                        value={settings.WATERMARK_OPACITY}
+                        onChange={(e) => setSettings({ ...settings, WATERMARK_OPACITY: e.target.value })}
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 mt-3"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

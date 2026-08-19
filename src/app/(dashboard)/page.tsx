@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { FileText, Users, Activity, Clock, Star, Database } from "lucide-react";
+import { FileText, Users, Activity, Clock, Star } from "lucide-react";
 import { format } from "date-fns";
 import Link from "next/link";
 import DashboardCharts from "@/components/DashboardCharts";

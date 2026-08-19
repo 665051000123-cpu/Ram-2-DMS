@@ -17,14 +17,21 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid path" }, { status: 400 });
     }
 
+    const clientWatchDir = searchParams.get("watchDir");
+
     let watchDir = path.join(process.cwd(), "scanned-docs");
-    try {
-      const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
-      if (setting && setting.value) {
-        watchDir = setting.value;
+    
+    if (clientWatchDir) {
+      watchDir = clientWatchDir;
+    } else {
+      try {
+        const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
+        if (setting && setting.value) {
+          watchDir = setting.value;
+        }
+      } catch (e) {
+        console.error("Failed to fetch SCANNER_DIR from DB", e);
       }
-    } catch (e) {
-      console.error("Failed to fetch SCANNER_DIR from DB", e);
     }
 
     const fullPath = path.join(watchDir, filePath);

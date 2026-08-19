@@ -44,11 +44,6 @@ export default function DocumentTypesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDepartmentId, setFilterDepartmentId] = useState("ALL");
 
-  useEffect(() => {
-    fetchDocTypes();
-    fetchDepartments();
-  }, []);
-
   const fetchDepartments = async () => {
     try {
       const res = await fetch("/api/departments");
@@ -70,6 +65,13 @@ export default function DocumentTypesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDocTypes();
+    fetchDepartments();
+  }, []);
+
+
 
   const openModal = (docType?: DocumentType) => {
     if (docType) {

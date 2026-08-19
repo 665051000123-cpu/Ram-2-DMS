@@ -31,7 +31,7 @@ export default async function ExpiredDocumentsPage() {
   }
 
   // Find documents where retentionPeriod is passed (expired) and not yet deleted
-  let whereClause: any = { 
+  const whereClause: any = { 
     isDeleted: false,
     retentionPeriod: {
       lt: new Date()

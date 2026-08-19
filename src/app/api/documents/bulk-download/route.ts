@@ -53,10 +53,12 @@ export async function POST(req: Request) {
     await prisma.auditLog.createMany({ data: auditLogs });
 
     const settings = await prisma.systemSetting.findMany({
-      where: { key: { in: ["ENABLE_PDF_WATERMARK", "WATERMARK_TEXT"] } }
+      where: { key: { in: ["ENABLE_PDF_WATERMARK", "WATERMARK_TEXT", "WATERMARK_COLOR", "WATERMARK_OPACITY"] } }
     });
     const watermarkSetting = settings.find((s: any) => s.key === "ENABLE_PDF_WATERMARK");
     const watermarkTextSetting = settings.find((s: any) => s.key === "WATERMARK_TEXT");
+    const watermarkColorSetting = settings.find((s: any) => s.key === "WATERMARK_COLOR");
+    const watermarkOpacitySetting = settings.find((s: any) => s.key === "WATERMARK_OPACITY");
     const isWatermarkEnabled = watermarkSetting?.value === "true";
 
     const archive = archiver("zip", { zlib: { level: 9 } });
@@ -115,36 +117,48 @@ export async function POST(req: Request) {
             const baseText = customText.replace(/{name}/g, "").replace(/{time}/g, "").replace(/-\s*-/g, "-").trim();
             const watermarkText = `${baseText} - ${session.user.name || "Unknown"} - ${new Date().toLocaleString('th-TH')}`;
             
+            const watermarkColorHex = watermarkColorSetting?.value || "#66b2e5";
+            const cleanHex = watermarkColorHex.replace('#', '');
+            const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+            const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+            const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+            
+            const watermarkOpacityRaw = watermarkOpacitySetting?.value || "5";
+            let opacityVal = parseFloat(watermarkOpacityRaw) / 100;
+            if (isNaN(opacityVal) || opacityVal <= 0) opacityVal = 0.05;
+            
+            const fontSize = 16;
+            const textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+            const textHeight = font.heightAtSize(fontSize);
+            const xStep = textWidth + 30;
+            const yStep = textHeight + 50;
+
             pages.forEach((page) => {
               const { width, height } = page.getSize();
-              let fontSize = 36;
-              let textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
-              
               const diagonal = Math.sqrt(width * width + height * height);
-              const maxTextWidth = diagonal * 0.8;
               
-              if (textWidth > maxTextWidth) {
-                fontSize = Math.floor(fontSize * (maxTextWidth / textWidth));
-                textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
+              let row = 0;
+              for (let ry = -diagonal; ry < diagonal * 2; ry += yStep) {
+                const rowOffsetX = (row % 2 === 0) ? 0 : xStep / 2;
+                
+                for (let rx = -diagonal; rx < diagonal * 2; rx += xStep) {
+                  const currentRx = rx + rowOffsetX;
+                  const radians = Math.PI / 4;
+                  const x = currentRx * Math.cos(radians) - ry * Math.sin(radians);
+                  const y = currentRx * Math.sin(radians) + ry * Math.cos(radians);
+                  
+                  page.drawText(watermarkText, {
+                    x,
+                    y,
+                    size: fontSize,
+                    font,
+                    color: rgb(r, g, b),
+                    opacity: opacityVal,
+                    rotate: degrees(45),
+                  });
+                }
+                row++;
               }
-
-              const textHeight = font.heightAtSize(fontSize);
-              const radians = Math.PI / 4;
-              const cx = width / 2;
-              const cy = height / 2;
-              
-              const x = cx - (textWidth / 2) * Math.cos(radians) + (textHeight / 2) * Math.sin(radians);
-              const y = cy - (textWidth / 2) * Math.sin(radians) - (textHeight / 2) * Math.cos(radians);
-              
-              page.drawText(watermarkText, {
-                x,
-                y,
-                size: fontSize,
-                font,
-                color: rgb(0.4, 0.7, 0.9), // Light blue
-                opacity: 0.4,
-                rotate: degrees(45),
-              });
             });
 
             const modifiedPdfBytes = await pdfDoc.save();

@@ -11,18 +11,29 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_APP_PATH" } });
-    if (!setting || !setting.value) {
-      return NextResponse.json({ error: "Scanner app path not configured in settings." }, { status: 400 });
+    let appPathConfig = "";
+    try {
+      const body = await req.json();
+      if (body.appPath) appPathConfig = body.appPath;
+    } catch (e) {
+      // Ignore JSON parse errors
     }
 
-    const appPathConfig = setting.value.trim();
-    
+    if (!appPathConfig) {
+      const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_APP_PATH" } });
+      if (!setting || !setting.value) {
+        return NextResponse.json({ error: "Scanner app path not configured in settings." }, { status: 400 });
+      }
+      appPathConfig = setting.value.trim();
+    }
+
     // Extract the actual executable path to check if it exists
     let exePath = appPathConfig;
-    if (exePath.startsWith('"')) {
-      exePath = exePath.split('"')[1];
-    }
+    
+    // Remove all double quotes if user accidentally typed them
+    exePath = exePath.replace(/"/g, '');
+    // Remove trailing backslash (because it escapes the closing quote in CMD)
+    exePath = exePath.replace(/\\+$/, '');
 
     if (!fs.existsSync(exePath)) {
       return NextResponse.json({ error: "Scanner app executable not found at specified path." }, { status: 404 });
@@ -34,7 +45,7 @@ export async function POST(req: Request) {
     try {
       const { exec } = require("child_process");
       // Use explorer.exe to launch the app or shortcut in the user's interactive desktop context.
-      // This mimics a double-click and ensures TWAIN drivers initialize correctly.
+      // This mimics a double-click and ensures TWAIN drivers initialize correctly without flashing a CMD window.
       exec(`explorer.exe "${exePath}"`, (error: any) => {
         if (error) {
           console.error("Failed to launch scanner:", error);

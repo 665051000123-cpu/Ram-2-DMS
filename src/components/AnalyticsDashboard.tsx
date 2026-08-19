@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import {
   BarChart,
   Bar,
@@ -158,7 +157,7 @@ export default function AnalyticsDashboard({
                     radius={[0, 4, 4, 0]}
                     name="จำนวนดาวน์โหลด (ครั้ง)"
                   >
-                    {topDownloadedDocs.map((entry, index) => (
+                    {topDownloadedDocs.map((_, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}
@@ -197,7 +196,7 @@ export default function AnalyticsDashboard({
                       `${name} ${((percent || 0) * 100).toFixed(0)}%`
                     }
                   >
-                    {departmentStats.map((entry, index) => (
+                    {departmentStats.map((_, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={COLORS[index % COLORS.length]}

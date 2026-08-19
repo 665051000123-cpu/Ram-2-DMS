@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
-import path from "path";
-import { getUploadDir } from "@/lib/storage";
 
 export async function GET(req: Request) {
   try {

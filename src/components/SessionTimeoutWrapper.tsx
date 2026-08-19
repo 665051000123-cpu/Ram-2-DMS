@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 
@@ -33,11 +33,7 @@ export default function SessionTimeoutWrapper({
     fetchTimeoutSetting();
   }, []);
 
-  const resetTimer = useCallback(() => {
-    // This function doesn't need to do anything complex, 
-    // it just signals that activity happened.
-    // We will use a debounced approach below to reset the actual timeout.
-  }, []);
+
 
   useEffect(() => {
     if (!session) return; // Don't track if not logged in

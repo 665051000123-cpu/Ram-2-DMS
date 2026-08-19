@@ -6,66 +6,75 @@ const { v4: uuidv4 } = require('uuid');
 
 const prisma = new PrismaClient();
 
-// Configuration
-const WATCH_DIR = path.join(__dirname, 'scanned-docs');
-const PROCESSED_DIR = path.join(WATCH_DIR, 'processed');
-
-// Ensure directories exist
-if (!fs.existsSync(WATCH_DIR)) fs.mkdirSync(WATCH_DIR, { recursive: true });
-if (!fs.existsSync(PROCESSED_DIR)) fs.mkdirSync(PROCESSED_DIR, { recursive: true });
-
-console.log('=============================================');
-console.log('  DMS Auto-Scanner Sync Service Started');
-console.log('=============================================');
-console.log(`Watching directory: ${WATCH_DIR}`);
-console.log('Waiting for scanned documents...\n');
-
-async function getAdminUser() {
-  const admin = await prisma.user.findFirst({
-    where: { role: 'SUPER_ADMIN' },
-    include: { department: true }
-  });
-  if (!admin) {
-    throw new Error('No SUPER_ADMIN found in the database. Cannot assign uploaded documents.');
+async function startWatcher() {
+  // Fetch configuration from DB
+  let WATCH_DIR = path.join(__dirname, 'scanned-docs');
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: 'SCANNER_DIR' } });
+    if (setting && setting.value) {
+      WATCH_DIR = setting.value;
+    }
+  } catch (e) {
+    console.error('Failed to fetch SCANNER_WATCH_DIR from DB, using default:', e.message);
   }
-  return admin;
-}
 
-async function getDepartmentHead(deptName) {
-  const dept = await prisma.department.findFirst({
-    where: { name: { equals: deptName } }
-  });
-  
-  if (dept) {
-    const head = await prisma.user.findFirst({
-      where: { departmentId: dept.id, role: 'DEPT_HEAD' },
+  const PROCESSED_DIR = path.join(WATCH_DIR, 'processed');
+
+  // Ensure directories exist
+  if (!fs.existsSync(WATCH_DIR)) fs.mkdirSync(WATCH_DIR, { recursive: true });
+  if (!fs.existsSync(PROCESSED_DIR)) fs.mkdirSync(PROCESSED_DIR, { recursive: true });
+
+  console.log('=============================================');
+  console.log('  DMS Auto-Scanner Sync Service Started');
+  console.log('=============================================');
+  console.log(`Watching directory: ${WATCH_DIR}`);
+  console.log('Waiting for scanned documents...\n');
+
+  async function getAdminUser() {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN' },
       include: { department: true }
     });
-    
-    // If no DEPT_HEAD found, just get any user in that department to be safe, or return dept ID with no specific user if we want
-    if (head) return { user: head, dept: dept };
-    
-    const anyUser = await prisma.user.findFirst({
-      where: { departmentId: dept.id },
-      include: { department: true }
-    });
-    if (anyUser) return { user: anyUser, dept: dept };
-    
-    return { user: null, dept: dept };
+    if (!admin) {
+      throw new Error('No SUPER_ADMIN found in the database. Cannot assign uploaded documents.');
+    }
+    return admin;
   }
-  
-  return null;
-}
 
-const watcher = chokidar.watch(WATCH_DIR, {
-  ignored: /(^|[\/\\])\..|processed/, // ignore hidden files and processed folder
-  persistent: true,
-  ignoreInitial: true,
-  awaitWriteFinish: {
-    stabilityThreshold: 2000, // Wait 2 seconds after file size stops changing
-    pollInterval: 100
+  async function getDepartmentHead(deptName) {
+    const dept = await prisma.department.findFirst({
+      where: { name: { equals: deptName } }
+    });
+    
+    if (dept) {
+      const head = await prisma.user.findFirst({
+        where: { departmentId: dept.id, role: 'DEPT_HEAD' },
+        include: { department: true }
+      });
+      
+      if (head) return { user: head, dept: dept };
+      
+      const anyUser = await prisma.user.findFirst({
+        where: { departmentId: dept.id },
+        include: { department: true }
+      });
+      if (anyUser) return { user: anyUser, dept: dept };
+      
+      return { user: null, dept: dept };
+    }
+    
+    return null;
   }
-});
+
+  const watcher = chokidar.watch(WATCH_DIR, {
+    ignored: /(^|[\/\\])\..|processed/, // ignore hidden files and processed folder
+    persistent: true,
+    ignoreInitial: true,
+    awaitWriteFinish: {
+      stabilityThreshold: 2000, // Wait 2 seconds after file size stops changing
+      pollInterval: 100
+    }
+  });
 
 watcher.on('add', async (filePath) => {
   const relativePath = path.relative(WATCH_DIR, filePath);
@@ -200,3 +209,6 @@ watcher.on('add', async (filePath) => {
 
 watcher.on('error', error => console.error(`Watcher error: ${error}`));
 
+} // End of startWatcher()
+
+startWatcher();

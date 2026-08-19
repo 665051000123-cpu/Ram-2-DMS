@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { FileText, Trash, Trash2, Eye, Download, XCircle } from "lucide-react";
+import { FileText, Trash, Trash2, Eye, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import ConfirmModal from "@/components/ConfirmModal";
 
@@ -48,7 +48,7 @@ export default function ExpiredDocumentList({
       toast.success(
         action === "SOFT_DELETE" ? "ย้ายเอกสารไปที่ถังขยะแล้ว" : "ลบเอกสารแบบถาวรสำเร็จ",
       );
-    } catch (error) {
+    } catch {
       toast.error("ทำรายการไม่สำเร็จ");
     }
   };

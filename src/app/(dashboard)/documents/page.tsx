@@ -14,32 +14,7 @@ export default async function DocumentsPage() {
     redirect("/login");
   }
 
-  // Fetch folders the user has access to
-  let accessibleFolders;
-  if (session.user.role === "SUPER_ADMIN") {
-    accessibleFolders = await prisma.folder.findMany({
-      orderBy: { name: "asc" }
-    });
-  } else {
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { departmentId: true, id: true, role: true }
-    });
-    accessibleFolders = await prisma.folder.findMany({
-      where: {
-        OR: [
-          { departmentId: user?.departmentId },
-          { departmentId: null },
-          ...(user?.departmentId ? [{ accessList: { some: { departmentId: user.departmentId } } }] : []),
-          { accessList: { some: { userId: user?.id } } },
-          { accessList: { some: { role: user?.role } } }
-        ]
-      },
-      orderBy: { name: "asc" }
-    });
-  }
-
-  let whereClause: any = {
+  const whereClause: any = {
     isDeleted: false,
   };
 

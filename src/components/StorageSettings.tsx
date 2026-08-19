@@ -5,8 +5,6 @@ import { Save, HardDrive, AlertTriangle } from "lucide-react";
 
 export default function StorageSettings() {
   const [uploadDir, setUploadDir] = useState("");
-  const [scannerDir, setScannerDir] = useState("");
-  const [scannerAppPath, setScannerAppPath] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
@@ -27,8 +25,6 @@ export default function StorageSettings() {
       if (res.ok) {
         const data = await res.json();
         setUploadDir(data.uploadDir || "");
-        setScannerDir(data.scannerDir || "");
-        setScannerAppPath(data.scannerAppPath || "");
         setS3Enabled(data.s3Enabled === "true");
         setS3Endpoint(data.s3Endpoint || "");
         setS3Bucket(data.s3Bucket || "");
@@ -59,8 +55,6 @@ export default function StorageSettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           uploadDir,
-          scannerDir,
-          scannerAppPath,
           s3Enabled: s3Enabled.toString(),
           s3Endpoint,
           s3Bucket,
@@ -219,62 +213,7 @@ export default function StorageSettings() {
           </div>
         </div>
 
-        <hr className="border-slate-200 dark:border-slate-700 my-6" />
 
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">โฟลเดอร์สำหรับรับไฟล์จากเครื่องสแกน (Scanner Watch Directory)</h3>
-          <p className="text-sm text-slate-500 dark:text-white mb-4">
-            กำหนดพาธโฟลเดอร์ที่เครื่องสแกน/ถ่ายเอกสารจะส่งไฟล์เข้ามา (ต้องตรงกับที่ตั้งค่าไว้ในเครื่องสแกน)
-          </p>
-          
-          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
-            Scanner Directory Path
-          </label>
-          <div className="flex gap-3 mb-6">
-            <input
-              type="text"
-              value={scannerDir}
-              onChange={(e) => setScannerDir(e.target.value)}
-              placeholder="C:\scanned-docs หรือ /var/www/scanned-docs"
-              className="flex-1 rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving || !scannerDir.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-            >
-              <Save size={16} />
-              {saving ? "กำลังบันทึก..." : "บันทึก"}
-            </button>
-          </div>
-
-          <p className="text-sm text-slate-500 dark:text-white mb-4">
-            กำหนดพาธโปรแกรมเครื่องสแกน (.exe) เพื่อให้ระบบหน้าเว็บสามารถสั่งเปิดโปรแกรมได้อัตโนมัติ (ตัวเลือกเสริม)
-          </p>
-          
-          <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
-            Scanner App Path (.exe)
-          </label>
-          <div className="flex gap-3 mb-2">
-            <input
-              type="text"
-              value={scannerAppPath}
-              onChange={(e) => setScannerAppPath(e.target.value)}
-              placeholder="C:\Program Files\Pantum\Scan\PantumScan.exe"
-              className="flex-1 rounded-lg border-slate-200 dark:border-slate-600 border p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            />
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-            >
-              <Save size={16} />
-              {saving ? "กำลังบันทึก..." : "บันทึก"}
-            </button>
-          </div>
-        </div>
-
-        <hr className="border-slate-200 dark:border-slate-700 my-6" />
 
         <div>
           <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">ระบบสำรองข้อมูลอัตโนมัติ (Cloud Backup)</h3>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { UploadCloud, FileText, X, AlertCircle, Camera, Calendar, ChevronDown, Inbox, RefreshCw, FileImage, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { UploadCloud, FileText, X, AlertCircle, ChevronDown, Inbox, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import CameraCapture from "@/components/CameraCapture";
@@ -43,8 +42,6 @@ export default function UploadPage() {
 
   const [redirectAfterUpload, setRedirectAfterUpload] = useState(true);
   const [showScannerModal, setShowScannerModal] = useState(false);
-  const [scannedFiles, setScannedFiles] = useState<any[]>([]);
-  const [isLoadingScanned, setIsLoadingScanned] = useState(false);
   const [scannedFilePath, setScannedFilePath] = useState<string | null>(null);
 
   // Custom Dropdown State for Document Type

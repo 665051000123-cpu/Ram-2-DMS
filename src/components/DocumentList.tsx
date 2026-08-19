@@ -1050,7 +1050,7 @@ export default function DocumentList({
                                   )}
                                   <td className="py-4 px-6 whitespace-nowrap">
                                     <div className="flex items-center justify-center gap-2">
-                                      {doc.fileType === "application/pdf" ? (
+                                      {(doc.fileType === "application/pdf" || doc.fileUrl?.toLowerCase().endsWith(".pdf")) ? (
                                         <button
                                           onClick={() =>
                                             setViewModal({
@@ -1420,7 +1420,7 @@ export default function DocumentList({
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {historyModal.doc.fileType === "application/pdf" && (
+                    {(historyModal.doc.fileType === "application/pdf" || historyModal.doc.fileUrl?.toLowerCase().endsWith(".pdf")) && (
                       <button
                         onClick={() =>
                           setViewModal({
@@ -1460,7 +1460,7 @@ export default function DocumentList({
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      {v.fileType === "application/pdf" && (
+                      {(v.fileType === "application/pdf" || v.fileUrl?.toLowerCase().endsWith(".pdf")) && (
                         <button
                           onClick={() =>
                             setViewModal({

@@ -11,8 +11,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const departmentId = searchParams.get("departmentId");
 
     let documentTypes = await prisma.documentType.findMany({
       include: { department: { select: { id: true, name: true } } },

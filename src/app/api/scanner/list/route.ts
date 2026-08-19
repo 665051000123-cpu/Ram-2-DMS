@@ -34,14 +34,22 @@ export async function GET(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const { searchParams } = new URL(req.url);
+    const clientWatchDir = searchParams.get("watchDir");
+
     let watchDir = path.join(process.cwd(), "scanned-docs");
-    try {
-      const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
-      if (setting && setting.value) {
-        watchDir = setting.value;
+    
+    if (clientWatchDir) {
+      watchDir = clientWatchDir;
+    } else {
+      try {
+        const setting = await prisma.systemSetting.findUnique({ where: { key: "SCANNER_DIR" } });
+        if (setting && setting.value) {
+          watchDir = setting.value;
+        }
+      } catch (e) {
+        console.error("Failed to fetch SCANNER_DIR from DB", e);
       }
-    } catch (e) {
-      console.error("Failed to fetch SCANNER_DIR from DB", e);
     }
 
     // Passive Auto-Cleanup: Run asynchronously (fire-and-forget)

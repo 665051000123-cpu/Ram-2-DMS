@@ -1,6 +1,5 @@
 "use client";
 
-"use client";
 import { useState, useMemo } from "react";
 import {
   UserPlus,
@@ -106,7 +105,6 @@ export default function UserList({
   };
 
   const executeAddUser = async () => {
-    const { action } = confirmModal;
     setConfirmModal({ isOpen: false, userId: "", userName: "", action: "ADD" });
     setLoading(true);
 
