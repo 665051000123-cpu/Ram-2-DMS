@@ -387,10 +387,10 @@ export default function UploadPage() {
                   <p className="text-sm text-slate-500 dark:text-white mb-4">
                     รองรับไฟล์ PDF, JPG, PNG (สูงสุด 10MB)
                   </p>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-stretch justify-center gap-3">
                     <button
                       type="button"
-                      className="px-5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white font-medium rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all duration-200"
+                      className="px-5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white font-medium rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all duration-200 flex items-center justify-center"
                     >
                       ค้นหาไฟล์ในเครื่อง
                     </button>
@@ -400,7 +400,7 @@ export default function UploadPage() {
                         e.stopPropagation();
                         setShowScannerModal(true);
                       }}
-                      className="px-5 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium rounded-lg shadow-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 border border-blue-200 dark:border-blue-800 flex flex-col items-center justify-center gap-0.5"
+                      className="px-5 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium rounded-lg shadow-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 border border-blue-200 dark:border-blue-800 flex flex-col items-center justify-center gap-0.5"
                     >
                       <div className="flex items-center gap-2">
                         <Inbox size={18} />

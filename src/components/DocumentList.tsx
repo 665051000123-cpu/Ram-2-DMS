@@ -1286,11 +1286,11 @@ export default function DocumentList({
                 <label className="block text-sm font-medium text-slate-700 dark:text-white mb-2">
                   อัปโหลดไฟล์เวอร์ชันใหม่ (ถ้ามี)
                 </label>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-3">
                   <button
                     type="button"
                     onClick={() => editFileInputRef.current?.click()}
-                    className="w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white font-medium rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-200"
+                    className="w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-white font-medium rounded-lg shadow-sm hover:bg-slate-50 transition-all duration-200 flex items-center justify-center"
                   >
                     ค้นหาไฟล์ในเครื่อง
                   </button>
