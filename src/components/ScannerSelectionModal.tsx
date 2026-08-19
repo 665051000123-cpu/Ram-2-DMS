@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Inbox, RefreshCw, X, Loader2, FileText, FileImage, Settings } from "lucide-react";
+import { Inbox, RefreshCw, X, FileText, FileImage, FolderSearch } from "lucide-react";
 import toast from "react-hot-toast";
 
 type ScannerSelectionModalProps = {
@@ -10,118 +10,138 @@ type ScannerSelectionModalProps = {
   onFileSelect: (file: File) => void;
 };
 
+// Global variable to keep the handle in memory during the session
+let globalDirHandle: any = null;
+
 export default function ScannerSelectionModal({
   isOpen,
   onClose,
   onFileSelect,
 }: ScannerSelectionModalProps) {
+  const [dirHandle, setDirHandle] = useState<any>(null);
   const [scannedFiles, setScannedFiles] = useState<any[]>([]);
-  const [isLoadingScanned, setIsLoadingScanned] = useState(false);
-  const [scannerListeningTime, setScannerListeningTime] = useState<number | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  
-  // Local Settings State
-  const [localWatchDir, setLocalWatchDir] = useState("");
-  const [localAppPath, setLocalAppPath] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isWatching, setIsWatching] = useState(false);
+  const [watchStartTime, setWatchStartTime] = useState<number | null>(null);
+  const [isBrowserSupported, setIsBrowserSupported] = useState(true);
 
+  // Check browser support on mount
   useEffect(() => {
-    // Load local settings on mount
-    const savedDir = localStorage.getItem("dms_local_scanner_dir") || "";
-    const savedApp = localStorage.getItem("dms_local_scanner_app") || "";
-    setLocalWatchDir(savedDir);
-    setLocalAppPath(savedApp);
+    if (typeof window !== 'undefined' && !('showDirectoryPicker' in window)) {
+      setIsBrowserSupported(false);
+    }
   }, []);
 
+  // Initialize session handle if exists
   useEffect(() => {
     if (isOpen) {
-      startScannerAutoDetect();
+      if (globalDirHandle) {
+        setDirHandle(globalDirHandle);
+        startWatching(globalDirHandle);
+      }
+    } else {
+      // Reset state when closed
+      setIsWatching(false);
+      setWatchStartTime(null);
     }
   }, [isOpen]);
 
-  const startScannerAutoDetect = async () => {
+  const requestDirectoryAccess = async () => {
     try {
-      // 1. Fetch settings from server as fallback
-      const settingsRes = await fetch("/api/settings");
-      const settings = await settingsRes.json();
-      
-      // Get paths (prioritize localStorage, then system settings, then default)
-      const watchDir = localStorage.getItem("dms_local_scanner_dir") || settings.SCANNER_DIR || "D:\\scanned-docs";
-      const appPath = localStorage.getItem("dms_local_scanner_app") || settings.SCANNER_APP_PATH || "C:\\Program Files\\NAPS2\\NAPS2.exe";
-
-      const now = Date.now();
-      setScannerListeningTime(now);
-      setScannedFiles([]);
-
-      // Trigger the server to launch the scanner driver
-      await fetch("/api/scanner/launch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appPath })
+      // Request access to a directory
+      const handle = await (window as any).showDirectoryPicker({
+        mode: "read"
       });
+      globalDirHandle = handle;
+      setDirHandle(handle);
+      startWatching(handle);
+      toast.success("เชื่อมต่อโฟลเดอร์สำเร็จ");
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        toast.error("ไม่สามารถเข้าถึงโฟลเดอร์ได้");
+      }
+    }
+  };
 
-      // Load initial files
-      loadScannedFiles(watchDir);
+  const startWatching = async (handle: any) => {
+    setIsWatching(true);
+    setWatchStartTime(Date.now());
+    await loadFiles(handle);
+  };
+
+  const getFilesInDir = async (handle: any) => {
+    const files = [];
+    for await (const entry of handle.values()) {
+      if (entry.kind === 'file') {
+        const file = await entry.getFile();
+        const ext = file.name.toLowerCase();
+        if (ext.endsWith('.pdf') || ext.endsWith('.jpg') || ext.endsWith('.png') || ext.endsWith('.jpeg')) {
+          files.push({
+            name: file.name,
+            size: file.size,
+            lastModified: file.lastModified,
+            file: file // Store the actual File object
+          });
+        }
+      }
+    }
+    // Sort by last modified (newest first)
+    return files.sort((a, b) => b.lastModified - a.lastModified);
+  };
+
+  const loadFiles = async (handle: any) => {
+    setIsLoading(true);
+    try {
+      const files = await getFilesInDir(handle);
+      setScannedFiles(files);
     } catch (e) {
       console.error(e);
-      toast.error("ไม่สามารถเปิดโปรแกรมสแกนได้");
-    }
-  };
-
-  const loadScannedFiles = async (overrideWatchDir?: string) => {
-    setIsLoadingScanned(true);
-    try {
-      const dir = overrideWatchDir || localStorage.getItem("dms_local_scanner_dir") || "";
-      const res = await fetch(`/api/scanner/list?watchDir=${encodeURIComponent(dir)}`);
-      const data = await res.json();
-      if (data.files) setScannedFiles(data.files);
-    } catch (e) {
-      toast.error("ไม่สามารถดึงข้อมูลจากเครื่องสแกนได้");
+      toast.error("เกิดข้อผิดพลาดในการอ่านไฟล์");
+      setIsWatching(false);
+      setDirHandle(null);
+      globalDirHandle = null;
     } finally {
-      setIsLoadingScanned(false);
+      setIsLoading(false);
     }
   };
 
-  const handleSelectScannedFile = async (filePath: string, fileName: string) => {
-    const loadingToast = toast.loading("กำลังเตรียมไฟล์...");
-    try {
-      const dir = localStorage.getItem("dms_local_scanner_dir") || "";
-      const res = await fetch(`/api/scanner/file?path=${encodeURIComponent(filePath)}&watchDir=${encodeURIComponent(dir)}`);
-      if (!res.ok) throw new Error("Failed to fetch");
-      const blob = await res.blob();
-      const newFile = new File([blob], fileName, { type: blob.type });
-      onFileSelect(newFile);
-      toast.success("ดึงไฟล์สำเร็จ", { id: loadingToast });
-    } catch (e) {
-      toast.error("ดึงไฟล์ไม่สำเร็จ", { id: loadingToast });
-    }
+  const handleSelectScannedFile = (file: File) => {
+    onFileSelect(file);
+    toast.success("ดึงไฟล์สำเร็จ");
   };
 
-  // Scanner Polling Effect
+  // Polling Effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (isOpen && scannerListeningTime) {
+    if (isOpen && dirHandle && isWatching && watchStartTime) {
       interval = setInterval(async () => {
         try {
-          const dir = localStorage.getItem("dms_local_scanner_dir") || "";
-          const res = await fetch(`/api/scanner/latest?since=${scannerListeningTime}&watchDir=${encodeURIComponent(dir)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.file) {
-              clearInterval(interval);
-              handleSelectScannedFile(data.file.path, data.file.name);
-            }
+          const files = await getFilesInDir(dirHandle);
+          
+          // Detect if a NEW file was added AFTER we started watching
+          // We add a 500ms buffer in case of slight time differences
+          const newFile = files.find(f => f.lastModified > watchStartTime + 500);
+          
+          if (newFile) {
+            clearInterval(interval);
+            setIsWatching(false);
+            handleSelectScannedFile(newFile.file);
+          } else {
+            // Just update the list so the user sees existing files
+            setScannedFiles(files);
           }
         } catch (e) {
           console.error("Polling error", e);
         }
-      }, 2000);
+      }, 1500); // Check every 1.5 seconds
     }
 
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isOpen, scannerListeningTime]);
+  }, [isOpen, dirHandle, isWatching, watchStartTime]);
 
   if (!isOpen) return null;
 
@@ -131,23 +151,18 @@ export default function ScannerSelectionModal({
         <div className="p-6 border-b border-slate-100 dark:border-slate-600 flex items-center justify-between bg-slate-50 dark:bg-slate-800">
           <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2 text-lg">
             <Inbox className="text-blue-600 dark:text-blue-400" />
-            ดึงไฟล์จากเครื่องสแกน
+            ดึงไฟล์จากเครื่องสแกน (Agentless)
           </h3>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-lg transition-colors ${showSettings ? "bg-blue-100 text-blue-600 dark:bg-blue-900/50" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30"}`}
-              title="ตั้งค่าเครื่องสแกน"
-            >
-              <Settings size={20} />
-            </button>
-            <button
-              onClick={() => loadScannedFiles()}
-              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-              title="รีเฟรช"
-            >
-              <RefreshCw size={20} className={isLoadingScanned ? "animate-spin" : ""} />
-            </button>
+            {dirHandle && (
+              <button
+                onClick={() => loadFiles(dirHandle)}
+                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                title="รีเฟรช"
+              >
+                <RefreshCw size={20} className={isLoading ? "animate-spin" : ""} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
@@ -158,63 +173,37 @@ export default function ScannerSelectionModal({
         </div>
         
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-800/50">
-          {showSettings ? (
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-              <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                <Settings className="text-blue-500" size={20} />
-                ตั้งค่าเครื่องสแกน (เฉพาะเครื่องนี้)
+          {!isBrowserSupported ? (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+              <h4 className="text-lg font-bold text-red-700 dark:text-red-400 mb-2">
+                เบราว์เซอร์ของคุณไม่รองรับฟีเจอร์นี้
               </h4>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                การตั้งค่าเหล่านี้จะถูกบันทึกไว้ในเบราว์เซอร์ของเครื่องนี้เท่านั้น ไม่ส่งผลกระทบต่อเครื่องอื่นๆ
+              <p className="text-red-600 dark:text-red-300 text-sm">
+                ฟีเจอร์นี้ต้องใช้ File System Access API กรุณาใช้งานผ่านเบราว์เซอร์ Google Chrome, Microsoft Edge หรือ Opera ครับ
               </p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    โฟลเดอร์เก็บไฟล์สแกน (Scanner Watch Directory)
-                  </label>
-                  <input
-                    type="text"
-                    value={localWatchDir}
-                    onChange={(e) => setLocalWatchDir(e.target.value)}
-                    placeholder="เช่น D:\scanned-docs\processed"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นจากระบบ</p>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Path ของโปรแกรมสแกน (Scanner App Path)
-                  </label>
-                  <input
-                    type="text"
-                    value={localAppPath}
-                    onChange={(e) => setLocalAppPath(e.target.value)}
-                    placeholder="เช่น C:\Program Files\NAPS2\NAPS2.exe"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div className="pt-4 flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      localStorage.setItem("dms_local_scanner_dir", localWatchDir);
-                      localStorage.setItem("dms_local_scanner_app", localAppPath);
-                      toast.success("บันทึกการตั้งค่าสำหรับเครื่องนี้เรียบร้อยแล้ว");
-                      setShowSettings(false);
-                      startScannerAutoDetect(); // Restart process with new settings
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    บันทึกการตั้งค่า
-                  </button>
-                </div>
+            </div>
+          ) : !dirHandle ? (
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center shadow-sm">
+              <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-500">
+                <FolderSearch size={40} />
               </div>
+              <h4 className="text-xl font-bold text-slate-800 dark:text-white mb-3">
+                เชื่อมต่อโฟลเดอร์สแกน
+              </h4>
+              <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                เพื่อความปลอดภัย เบราว์เซอร์จำเป็นต้องขออนุญาตเพื่อเฝ้าดูโฟลเดอร์ที่คุณใช้เก็บไฟล์สแกน (ทำเพียง 1 ครั้งต่อการเปิดเว็บ)
+              </p>
+              <button
+                onClick={requestDirectoryAccess}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center gap-2 mx-auto"
+              >
+                <FolderSearch size={20} />
+                อนุญาตและเลือกโฟลเดอร์
+              </button>
             </div>
           ) : (
             <>
-              {scannerListeningTime && !isLoadingScanned && (
+              {isWatching && (
                 <div className="mb-6 bg-blue-50 border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800 rounded-xl p-6 text-center shadow-sm">
                   <div className="flex justify-center mb-4 relative">
                     <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-20"></div>
@@ -223,35 +212,46 @@ export default function ScannerSelectionModal({
                     </div>
                   </div>
                   <h4 className="text-lg font-bold text-blue-800 dark:text-blue-300 mb-2">
-                    กำลังเปิดโปรแกรมและรอรับไฟล์...
+                    เชื่อมต่อแล้ว! กำลังรอรับไฟล์...
                   </h4>
                   <p className="text-blue-600 dark:text-blue-400 text-sm">
-                    กรุณาสแกนเอกสารให้เสร็จสิ้น ระบบจะดึงไฟล์เข้ามาที่นี่โดยอัตโนมัติ
+                    คุณสามารถสแกนเอกสารได้เลย ทันทีที่ไฟล์เข้าโฟลเดอร์ ระบบจะดึงเข้ามาโดยอัตโนมัติ
                   </p>
+                  <button 
+                    onClick={() => {
+                      setDirHandle(null);
+                      globalDirHandle = null;
+                      setIsWatching(false);
+                    }}
+                    className="mt-4 text-xs text-blue-500 hover:underline"
+                  >
+                    เปลี่ยนโฟลเดอร์สแกน
+                  </button>
                 </div>
               )}
 
-              {isLoadingScanned ? (
+              {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-500">
                   <RefreshCw size={32} className="animate-spin mb-4 text-blue-500" />
-                  <p>กำลังดึงข้อมูลจากโฟลเดอร์สแกน...</p>
+                  <p>กำลังอ่านไฟล์ในโฟลเดอร์...</p>
                 </div>
               ) : scannedFiles.length === 0 ? (
-                !scannerListeningTime && (
-                  <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-                    <Inbox size={48} className="mb-4 text-slate-300 dark:text-slate-600" />
-                    <p>ไม่พบไฟล์ในโฟลเดอร์สแกน</p>
-                    <p className="text-sm mt-2 text-slate-400">ลองสแกนเอกสารใหม่หรือกดรีเฟรช</p>
-                  </div>
-                )
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                  <Inbox size={48} className="mb-4 text-slate-300 dark:text-slate-600" />
+                  <p>ไม่พบไฟล์ในโฟลเดอร์นี้</p>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-slate-700 dark:text-slate-300 text-sm mb-3">หรือเลือกไฟล์ที่มีอยู่แล้วในโฟลเดอร์</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-slate-700 dark:text-slate-300 text-sm">หรือเลือกไฟล์ที่มีอยู่แล้ว</h4>
+                    <span className="text-xs text-slate-500">{scannedFiles.length} ไฟล์</span>
+                  </div>
+                  
                   {scannedFiles.map((f, i) => (
                     <div 
                       key={i} 
                       className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between hover:border-blue-300 dark:hover:border-blue-600 transition-colors group cursor-pointer"
-                      onClick={() => handleSelectScannedFile(f.path, f.name)}
+                      onClick={() => handleSelectScannedFile(f.file)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
@@ -264,15 +264,7 @@ export default function ScannerSelectionModal({
                           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-1">
                             <span>{(f.size / 1024).toFixed(1)} KB</span>
                             <span>•</span>
-                            <span>{new Date(f.date).toLocaleString('th-TH')}</span>
-                            {f.path.includes('/') && (
-                              <>
-                                <span>•</span>
-                                <span className="bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-[10px]">
-                                  {f.path.split('/')[0]}
-                                </span>
-                              </>
-                            )}
+                            <span>{new Date(f.lastModified).toLocaleString('th-TH')}</span>
                           </div>
                         </div>
                       </div>
