@@ -403,7 +403,7 @@ export default function UploadPage() {
                       className="px-5 py-2.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium rounded-lg shadow-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 border border-blue-200 dark:border-blue-800 flex items-center gap-2"
                     >
                       <Inbox size={18} />
-                      ดึงจากเครื่องสแกน
+                      ดึงจากเครื่องสแกน (อยู่ระหว่างพัฒนาปรับปรุง)
                     </button>
                   </div>
                 </div>
@@ -428,7 +428,7 @@ export default function UploadPage() {
                           }}
                           className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium flex items-center gap-1"
                         >
-                          <Inbox size={14} /> ดึงจากเครื่องสแกน
+                          <Inbox size={14} /> ดึงจากเครื่องสแกน (อยู่ระหว่างพัฒนาปรับปรุง)
                         </button>
                       </div>
                     )}

@@ -1303,7 +1303,7 @@ export default function DocumentList({
                     className="w-full sm:w-auto px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium rounded-lg shadow-sm hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all duration-200 border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-2"
                   >
                     <Inbox size={16} />
-                    ดึงจากเครื่องสแกน
+                    ดึงจากเครื่องสแกน (อยู่ระหว่างพัฒนาปรับปรุง)
                   </button>
                 </div>
                 {editModal.file && (
